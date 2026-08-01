@@ -32,3 +32,16 @@ model Session {
   refreshToken        String?
   refreshTokenExpires DateTime?
 }
+
+model ShopSettings {
+  id           String   @id @default(cuid())
+  shop         String   @unique
+  settleInDays Int      @default(3)
+  sendHour     Int      @default(10)          // 0-23
+  clockSource  String   @default("customer")  // "customer" | "store"
+  quietDays    Int[]    @default([0])         // 0=Sun ... 6=Sat
+  timezone     String   @default("Asia/Kolkata")
+  noTracking   String   @default("fixed")     // "fixed" | "skip"
+  noTrackDays  Int      @default(7)
+  updatedAt    DateTime @updatedAt
+}
