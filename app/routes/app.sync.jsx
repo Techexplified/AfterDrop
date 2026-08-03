@@ -1,3 +1,4 @@
+// app/routes/app.sync.jsx
 import { useFetcher } from "react-router";
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
@@ -14,7 +15,13 @@ export async function action({ request }) {
             id
             name
             totalPriceSet { shopMoney { amount } }
-            customer { tags }
+            customer {
+              firstName
+              lastName
+              displayName
+              email
+              tags
+            }
             cancelledAt
             fulfillments(first: 1) {
               trackingInfo(first: 1) { number }
@@ -46,13 +53,24 @@ export async function action({ request }) {
       .map(e => e.node.product?.productType)
       .filter(Boolean);
 
+    // Name resolution cascade: Shopify's displayName -> manual first/last -> email -> guest
+    const cust = node.customer;
+    const custName =
+      cust?.displayName?.trim() ||
+      `${cust?.firstName || ''} ${cust?.lastName || ''}`.trim() ||
+      cust?.email ||
+      "Guest Customer";
+
     await db.order.upsert({
       where: { id: node.id },
-      update: {},
+      update: {
+        customerName: custName,
+      },
       create: {
         id: node.id,
         shop: session.shop,
         name: node.name,
+        customerName: custName,
         customerTags: node.customer?.tags ?? [],
         productTypes,
         totalPrice: Math.round(Number(node.totalPriceSet.shopMoney.amount) * 100),

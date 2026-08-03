@@ -65,6 +65,7 @@ model Order {
   id                  String    @id            // Shopify order GID
   shop                String
   name                String                    // #1001
+  customerName        String?
   customerId          String? 
   customerTags        String[]  @default([])
   productTypes        String[]  @default([])
