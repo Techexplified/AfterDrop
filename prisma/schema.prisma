@@ -60,3 +60,29 @@ model SuppressionSettings {
   excludedProductTypes  String[] @default(["Digital"])
   updatedAt             DateTime @updatedAt
 }
+
+model Order {
+  id                  String    @id            // Shopify order GID
+  shop                String
+  name                String                    // #1001
+  customerId          String? 
+  customerTags        String[]  @default([])
+  productTypes        String[]  @default([])
+  totalPrice          Int       @default(0)
+  fulfilledAt         DateTime?
+  trackingNumber      String?
+  deliveredAt         DateTime?
+  estimatedDeliveryAt DateTime?
+  cancelledAt         DateTime?
+  refundedAt          DateTime?
+  deliveryFailed      Boolean   @default(false)
+  unsubscribed        Boolean   @default(false)
+  sentAt              DateTime?
+  skippedByYou        Boolean   @default(false)
+  customerTimezone    String?       // NEW
+  createdAt           DateTime  @default(now())
+
+  @@index([shop])
+  @@index([customerId])
+  @@index([shop, customerId])
+}
