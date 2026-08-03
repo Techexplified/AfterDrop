@@ -45,3 +45,18 @@ model ShopSettings {
   noTrackDays  Int      @default(7)
   updatedAt    DateTime @updatedAt
 }
+
+model SuppressionSettings {
+  id                    String   @id @default(cuid())
+  shop                  String   @unique
+  refundedCancelled     Boolean  @default(true)
+  deliveryFailed        Boolean  @default(true)
+  openSupportTicket     Boolean  @default(false)
+  unsubscribed          Boolean  @default(true)
+  alreadyReviewed       Boolean  @default(false)
+  cooldownEnabled       Boolean  @default(true)
+  cooldownDays          Int      @default(10)
+  excludedTags          String[] @default(["wholesale"])
+  excludedProductTypes  String[] @default(["Digital"])
+  updatedAt             DateTime @updatedAt
+}
