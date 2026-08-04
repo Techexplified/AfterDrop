@@ -65,15 +65,17 @@ export async function action({ request }) {
         `${cust?.firstName || ''} ${cust?.lastName || ''}`.trim() ||
         cust?.email ||
         "Guest Customer";
+      const custEmail = node.customer?.email ?? null;
 
       await db.order.upsert({
         where: { id: node.id },
-        update: { customerName: custName },
+        update: { customerName: custName, customerEmail: custEmail, },
         create: {
           id: node.id,
           shop: session.shop,
           name: node.name,
           customerName: custName,
+          customerEmail: custEmail,
           customerTags: node.customer?.tags ?? [],
           productTypes,
           totalPrice: Math.round(Number(node.totalPriceSet.shopMoney.amount) * 100),

@@ -66,6 +66,7 @@ model Order {
   shop                String
   name                String                    // #1001
   customerName        String?
+  customerEmail       String?
   customerId          String? 
   customerTags        String[]  @default([])
   productTypes        String[]  @default([])
