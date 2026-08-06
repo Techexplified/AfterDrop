@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { data, useLoaderData, useSearchParams, useFetcher } from "react-router";
+import { data, useLoaderData, useSearchParams, useFetcher} from "react-router";
 import { authenticate } from "../shopify.server";
 import { scheduleAllOrders } from "../lib/schedule.server";
 import db from "../db.server";
 import { Journey } from "../components/queue/journey";
 import { OrderModal } from "../components/queue/ordermodal";
+import { sendReviewRequest } from "../lib/resend.server";
 
 const TABS = [
   { id: "SCHEDULED", label: "In the queue" },
@@ -42,9 +43,10 @@ export async function action({ request }) {
 
   const formData = await request.formData();
   const intent = formData.get("intent");
+  const orderId = formData.get("orderId");
 
+  // --- 1. TOGGLE SKIP ---
   if (intent === "toggle-skip") {
-    const orderId = formData.get("orderId");
     const skip = formData.get("skip") === "true";
 
     const order = await db.order.findFirst({ where: { id: orderId, shop } });
@@ -57,22 +59,59 @@ export async function action({ request }) {
     return data({ ok: true });
   }
 
+  // --- 2. SEND NOW ---
   if (intent === "send-now") {
-    const orderId = formData.get("orderId");
-    const order = await db.order.findFirst({ where: { id: orderId, shop } });
-    if (!order) return data({ error: "Order not found" }, { status: 404 });
+    if (!orderId) {
+      return data({ error: "Missing orderId" }, { status: 400 });
+    }
 
-    await db.order.update({
+    // Fetch order details from DB (without lineItems)
+    const order = await db.order.findUnique({
       where: { id: orderId },
-      data: {
-        sentAt: new Date(),
-        skippedByYou: false
-      },
     });
-    return data({ ok: true, sent: true });
+
+    if (!order) {
+      return data({ error: "Order not found" }, { status: 404 });
+    }
+
+    // Format human-readable Shop Name
+    const cleanShopName = session.shop
+      .replace(".myshopify.com", "")
+      .replace(/-/g, " ")
+      .replace(/\b\w/g, (l) => l.toUpperCase());
+
+    // Placeholder product details for now
+    const featuredProduct = {
+      name: `Items from Order ${order.name}`,
+      image: null,
+    };
+
+    // Send review request email via Resend
+    const emailResult = await sendReviewRequest({
+      email: order.customerEmail,
+      customerName: order.customerName || "there",
+      orderName: order.name,
+      shopName: cleanShopName,
+      product: featuredProduct,
+    });
+
+    // Update DB state on success
+    if (emailResult.success) {
+      await db.order.update({
+        where: { id: orderId },
+        data: {
+          sentAt: new Date(),
+          skippedByYou: false,
+        },
+      });
+
+      return data({ success: true, message: `Review request sent for order ${order.name}` });
+    } else {
+      return data({ error: emailResult.error }, { status: 500 });
+    }
   }
 
-  return data({ error: "Unknown intent" }, { status: 400 });
+  return data({ error: "Invalid action" }, { status: 400 });
 }
 
 function getInitials(name) {
