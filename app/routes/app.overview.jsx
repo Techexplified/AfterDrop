@@ -165,7 +165,7 @@ export default function Overview() {
         .mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
         .sub{color:var(--text-sub)}
         .pagehead{margin-bottom:var(--s5)}
-        .pagehead__sub{color:var(--text-sub);font-size:15px;margin-top:var(--s1);max-width:66ch}
+        .pagehead__sub{color:var(--text-sub);font-size:15px;margin-top:var(--s1)}
         .Card{background:var(--surface);border-radius:var(--r3);box-shadow:var(--sh-card);border:1px solid var(--border-sub);padding:var(--s4);margin-bottom:var(--s4)}
         .Card--flush{padding:0}
         .Card__head{display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--s3)}

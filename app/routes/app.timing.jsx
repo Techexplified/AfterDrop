@@ -74,13 +74,13 @@ export default function SendWindow() {
 
     return (
         <div className="afterdrop-ui" style={{ maxWidth: 1000, margin: "0 auto", padding: "40px 24px" }}>
-            <div style={{ marginBottom: 24 }}>
-                <h1 className="t-xl">Timing</h1>
-                <p className="sub">Configure when review requests are triggered, quiet day rules, and how untracked parcels are handled.</p>
-            </div>
             <fetcher.Form method="post">
-                <div className="Split">
+                <div style={{ maxWidth: "680px", margin: "0 auto" }}> {/* split class used to be here and moved title div to iniside this div*/}
 
+                    <div style={{ marginBottom: 24 }}>
+                        <h1 className="t-xl">Timing</h1>
+                        <p className="sub">Configure when review requests are triggered, quiet day rules, and how untracked parcels are handled.</p>
+                    </div>
                     {/* Controls Column */}
                     <div>
                         <div className="Card">
@@ -233,7 +233,7 @@ export default function SendWindow() {
                     </div>
 
                     {/* Static Placeholder Column */}
-                    <aside className="Sticky">
+                    {/* <aside className="Sticky">
                         <div className="Card">
                             <div className="Card__head"><h3 className="t-sm">On this setting, a real order would...</h3></div>
                             <div className="PlaceholderBox">
@@ -242,7 +242,7 @@ export default function SendWindow() {
                                 </p>
                             </div>
                         </div>
-                    </aside>
+                    </aside> */}
 
                 </div>
             </fetcher.Form>
