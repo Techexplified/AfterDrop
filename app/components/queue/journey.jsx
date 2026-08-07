@@ -55,7 +55,8 @@ export function Journey({ orderData, mini = false }) {
 
   let waitStart = 0;
   let waitEnd = 0;
-  if (delT && askT && orderData.state !== "SUPPRESSED") {
+  // AFTER (Fix: striped track only shows while actively waiting)
+  if (delT && askT && orderData.state !== "SUPPRESSED" && orderData.state !== "SENT") {
     const dNode = nodes.find((n) => n.lb === "Delivered" || n.lb === "Due to land");
     const aNode = nodes.find((n) => n.ask);
     if (dNode && aNode) {
