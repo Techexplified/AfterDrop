@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { data, useLoaderData, useSearchParams, useFetcher} from "react-router";
+import { data, useLoaderData, useSearchParams, useFetcher } from "react-router";
 import { authenticate } from "../shopify.server";
 import { scheduleAllOrders } from "../lib/schedule.server";
 import db from "../db.server";
@@ -18,6 +18,8 @@ const TABS = [
 const STATE_ICONS = {
   SCHEDULED: "sched", DUE: "due", WAITING: "wait", SUPPRESSED: "skip", SENT: "sent"
 };
+
+const PAGE_SIZE = 5;
 
 export async function loader({ request }) {
   const { session } = await authenticate.admin(request);
@@ -65,7 +67,6 @@ export async function action({ request }) {
       return data({ error: "Missing orderId" }, { status: 400 });
     }
 
-    // Fetch order details from DB (without lineItems)
     const order = await db.order.findUnique({
       where: { id: orderId },
     });
@@ -74,19 +75,16 @@ export async function action({ request }) {
       return data({ error: "Order not found" }, { status: 404 });
     }
 
-    // Format human-readable Shop Name
     const cleanShopName = session.shop
       .replace(".myshopify.com", "")
       .replace(/-/g, " ")
       .replace(/\b\w/g, (l) => l.toUpperCase());
 
-    // Placeholder product details for now
     const featuredProduct = {
       name: `Items from Order ${order.name}`,
       image: null,
     };
 
-    // Send review request email via Resend
     const emailResult = await sendReviewRequest({
       email: order.customerEmail,
       customerName: order.customerName || "there",
@@ -95,7 +93,6 @@ export async function action({ request }) {
       product: featuredProduct,
     });
 
-    // Update DB state on success
     if (emailResult.success) {
       await db.order.update({
         where: { id: orderId },
@@ -128,9 +125,24 @@ export default function Queue() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [activeModal, setActiveModal] = useState(null);
 
+  // --- PAGINATION CALCULATIONS ---
+  const rawPage = parseInt(searchParams.get("page") || "1", 10);
+  const totalPages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
+  const currentPage = Math.min(Math.max(1, isNaN(rawPage) ? 1 : rawPage), totalPages);
+
+  const startIndex = (currentPage - 1) * PAGE_SIZE;
+  const paginatedRows = rows.slice(startIndex, startIndex + PAGE_SIZE);
+
   const setFilter = (state) => {
     const newParams = new URLSearchParams(searchParams);
     newParams.set("state", state);
+    newParams.set("page", "1"); // Reset page on tab switch
+    setSearchParams(newParams);
+  };
+
+  const goToPage = (page) => {
+    const newParams = new URLSearchParams(searchParams);
+    newParams.set("page", page.toString());
     setSearchParams(newParams);
   };
 
@@ -172,7 +184,7 @@ export default function Queue() {
               {rows.length === 0 ? (
                 <tr><td colSpan="4" className="Empty"><b>Nothing here</b><p>No orders match this filter.</p></td></tr>
               ) : (
-                rows.map((row) => (
+                paginatedRows.map((row) => (
                   <tr key={row.order.id}>
                     <td>
                       <div className="Who">
@@ -209,6 +221,34 @@ export default function Queue() {
               )}
             </tbody>
           </table>
+
+          {/* PAGINATION CONTROLS */}
+          {rows.length > 0 && (
+            <div className="Pagination">
+              <span className="Pagination__info">
+                Showing {startIndex + 1}–{Math.min(startIndex + PAGE_SIZE, rows.length)} of {rows.length} orders
+              </span>
+              <div className="Pagination__btns">
+                <button
+                  className="Btn Btn--sm"
+                  onClick={() => goToPage(currentPage - 1)}
+                  disabled={currentPage <= 1}
+                >
+                  Previous
+                </button>
+                <span className="Pagination__count">
+                  Page {currentPage} of {totalPages}
+                </span>
+                <button
+                  className="Btn Btn--sm"
+                  onClick={() => goToPage(currentPage + 1)}
+                  disabled={currentPage >= totalPages}
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* LEGEND */}
@@ -223,11 +263,15 @@ export default function Queue() {
         <OrderModal data={activeModal} onClose={() => setActiveModal(null)} />
       </div>
 
-      {/* INJECTED STYLES: Safely tucked at the bottom of the component tree */}
+      {/* INJECTED STYLES */}
       <style dangerouslySetInnerHTML={{
         __html: `
-        /* CORE VARIABLES */
+        /* CORE VARIABLES & FONT BASE */
         :root{--bg:#F1F1F1;--surface:#FFFFFF;--surface-sub:#F7F7F7;--surface-hover:#F1F1F1;--border:#E3E3E3;--border-sub:#EBEBEB;--border-strong:#CDCDCD;--text:#303030;--text-sub:#616161;--text-dis:#8A8A8A;--icon:#4A4A4A;--focus:#005BD3;--crit:#E51C00;--crit-bg:#FFF0F0;--crit-text:#8E1F0B;--crit-border:#FFD2CC;--succ-bg:#CDFEE1;--succ-text:#0C5132;--succ-line:#29845A;--warn-bg:#FFF1E3;--warn-text:#5E4200;--warn-line:#B98900;--info-bg:#EBF9FC;--info-text:#00527C;--info-line:#0094D5;--ink:#3B2E63;--ink-line:#5B49A0;--ink-tint:#F4F2FC;--ink-edge:#DCD6F5;--mono:'IBM Plex Mono',ui-monospace,'SF Mono',Menlo,monospace;--r1:6px;--r2:8px;--r3:12px;--s1:4px;--s2:8px;--s3:12px;--s4:16px;--s5:20px;--sh-card:0 1px 0 0 rgba(26,26,26,.07);--sh-pop:0 4px 16px rgba(0,0,0,.14), 0 0 0 1px rgba(0,0,0,.06);}
+
+        body, button, input, select, textarea {
+          font-family: -apple-system, BlinkMacSystemFont, "San Francisco", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
 
         /* TYPOGRAPHY */
         .t-xl{font-size:28px;line-height:24px;font-weight:700;letter-spacing:-.01em}
@@ -258,6 +302,12 @@ export default function Queue() {
         .Table tr:hover td{background:#FCFCFC}
         .Table .end{text-align:right;white-space:nowrap}
         .rowsub{font-size:12px;color:var(--text-sub);line-height:16px;display:block;margin-top:1px}
+
+        /* PAGINATION */
+        .Pagination{display:flex;align-items:center;justify-content:space-between;padding:var(--s3) var(--s4);background:var(--surface-sub);border-top:1px solid var(--border-sub);border-radius:0 0 var(--r3) var(--r3)}
+        .Pagination__info{font-size:12px;color:var(--text-sub)}
+        .Pagination__btns{display:flex;align-items:center;gap:var(--s3)}
+        .Pagination__count{font-size:12px;color:var(--text-sub);font-weight:500}
 
         /* PEOPLE & AVATARS */
         .Who{display:flex !important;align-items:center !important;gap:12px !important;min-width:0}
@@ -332,7 +382,7 @@ export default function Queue() {
         .Jn--mini .Jn__dot{width:13px;height:13px;border-width:2px}
         .Jn--mini .Jn__lb,.Jn--mini .Jn__dt{display:none}
         .Jn--mini .Jn__now{top:2px;height:20px}
-      `}} />
+      ` }} />
     </>
   );
 }
