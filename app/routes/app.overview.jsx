@@ -32,8 +32,6 @@ export async function loader({ request }) {
     suppressed: results.filter((r) => r.state === "SUPPRESSED").length,
   };
 
-  // Keep full row shape (order, state, reason, sendAt, estimated, eta) so
-  // Journey/OrderModal — built for queue rows — work here unmodified.
   const upcoming = results
     .filter((r) => (r.state === "SCHEDULED" || r.state === "DUE") && r.sendAt)
     .sort((a, b) => new Date(a.sendAt) - new Date(b.sendAt));
@@ -43,6 +41,7 @@ export async function loader({ request }) {
     counts,
     waitDays: shopSettings?.settleInDays ?? null,
     recentSent,
+    sentTotal,
     page,
     totalPages: Math.max(1, Math.ceil(sentTotal / PAGE_SIZE)),
   });
@@ -56,7 +55,7 @@ function getInitials(name) {
 }
 
 export default function Overview() {
-  const { nextRequest, counts, waitDays, recentSent, page, totalPages } = useLoaderData();
+  const { nextRequest, counts, waitDays, recentSent, sentTotal, page, totalPages } = useLoaderData();
   const [searchParams, setSearchParams] = useSearchParams();
   const [activeModal, setActiveModal] = useState(null);
 
@@ -67,6 +66,10 @@ export default function Overview() {
   };
 
   const due = nextRequest && new Date(nextRequest.sendAt) <= new Date();
+
+  // Pagination calculations
+  const startIndex = (page - 1) * PAGE_SIZE;
+  const endIndex = Math.min(page * PAGE_SIZE, sentTotal);
 
   return (
     <>
@@ -145,19 +148,40 @@ export default function Overview() {
               )}
             </tbody>
           </table>
-          {totalPages > 1 && (
-            <div className="Pager">
-              <button className="Btn Btn--sm" disabled={page <= 1} onClick={() => goToPage(page - 1)}>Prev</button>
-              <span className="t-cap sub">Page {page} of {totalPages}</span>
-              <button className="Btn Btn--sm" disabled={page >= totalPages} onClick={() => goToPage(page + 1)}>Next</button>
+
+          {/* PAGINATION BAR */}
+          {sentTotal > 0 && (
+            <div className="Pagination">
+              <span className="Pagination__info">
+                Showing {sentTotal === 0 ? 0 : startIndex + 1}–{endIndex} of {sentTotal} orders
+              </span>
+              <div className="Pagination__btns">
+                <button
+                  className="Btn Btn--sm"
+                  disabled={page <= 1}
+                  onClick={() => goToPage(page - 1)}
+                >
+                  Previous
+                </button>
+                <span className="Pagination__count">
+                  Page {page} of {totalPages}
+                </span>
+                <button
+                  className="Btn Btn--sm"
+                  disabled={page >= totalPages}
+                  onClick={() => goToPage(page + 1)}
+                >
+                  Next
+                </button>
+              </div>
             </div>
           )}
         </div>
 
         <OrderModal data={activeModal} onClose={() => setActiveModal(null)} />
       </div>
-
-<style dangerouslySetInnerHTML={{ __html: `
+      <style dangerouslySetInnerHTML={{
+        __html: `
         :root{--bg:#F1F1F1;--surface:#FFFFFF;--surface-sub:#F7F7F7;--surface-hover:#F1F1F1;--border:#E3E3E3;--border-sub:#EBEBEB;--border-strong:#CDCDCD;--text:#303030;--text-sub:#616161;--text-dis:#8A8A8A;--icon:#4A4A4A;--focus:#005BD3;--crit:#E51C00;--succ-bg:#CDFEE1;--succ-text:#0C5132;--succ-line:#29845A;--warn-bg:#FFF1E3;--warn-text:#5E4200;--warn-line:#B98900;--info-line:#0094D5;--ink:#3B2E63;--ink-line:#5B49A0;--ink-tint:#F4F2FC;--ink-edge:#DCD6F5;--mono:'IBM Plex Mono',ui-monospace,'SF Mono',Menlo,monospace;--r1:6px;--r2:8px;--r3:12px;--s1:4px;--s2:8px;--s3:12px;--s4:16px;--s5:20px;--sh-card:0 1px 0 0 rgba(26,26,26,.07);--sh-pop:0 4px 16px rgba(0,0,0,.14), 0 0 0 1px rgba(0,0,0,.06);}
         
         body, button, input, select, textarea {
@@ -193,40 +217,16 @@ export default function Overview() {
         .Who b{font-weight:600;display:block;line-height:17px;color:var(--text)}
         .Who span{font-size:12px;color:var(--text-sub);display:block;line-height:16px}
         .Ava{width:28px !important;height:28px !important;border-radius:50% !important;background:var(--ink-tint) !important;color:var(--ink) !important;display:inline-flex !important;align-items:center !important;justify-content:center !important;font-size:11px !important;font-weight:700 !important;line-height:1 !important;text-align:center !important;padding:0 !important;margin:0 !important;flex:0 0 auto !important;border:1px solid var(--ink-edge) !important}
-        .St{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:500;white-space:nowrap}
-        .St::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--text-dis);flex:0 0 auto}
-        .St--sche::before{background:var(--ink-line)}
-        .St--due::before{background:var(--warn-line)}
-        .St--wait::before{background:var(--info-line)}
-        .St--sent::before{background:var(--succ-line)}
-        .St--supp::before{background:var(--text-dis)}
         .Btn{height:32px;padding:0 12px;border:0;border-radius:var(--r2);background:var(--surface);color:var(--text);box-shadow:0 0 0 1px rgba(0,0,0,.08) inset, 0 -1px 0 0 #B5B5B5 inset, 0 1px 0 0 rgba(255,255,255,.48) inset;font-size:13px;font-weight:600;line-height:32px;display:inline-flex;align-items:center;cursor:pointer}
         .Btn:hover{background:#F7F7F7}
         .Btn--sm{height:28px;padding:0 8px;font-size:12px;line-height:28px}
         .Btn[disabled]{opacity:.42;pointer-events:none}
-        .Pager{display:flex;align-items:center;gap:var(--s3);justify-content:flex-end;padding:var(--s3) var(--s4)}
-        .Backdrop{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:90;display:grid;place-items:center;padding:var(--s5);overflow-y:auto}
-        .Modal{background:var(--surface);border-radius:var(--r3);width:100%;max-width:520px;box-shadow:var(--sh-pop);max-height:88vh;display:flex;flex-direction:column}
-        .Modal__h{display:flex;align-items:center;gap:var(--s3);padding:var(--s4);border-bottom:1px solid var(--border-sub)}
-        .Modal__h h3{flex:1;font-size:15px;font-weight:650;margin:0}
-        .Modal__x{width:28px;height:28px;border:0;background:none;border-radius:var(--r1);color:var(--icon);display:grid;place-items:center;font-size:18px;line-height:1;cursor:pointer}
-        .Modal__x:hover{background:var(--surface-hover)}
-        .Modal__b{padding:var(--s4);overflow-y:auto}
-        .Modal__f{padding:var(--s3) var(--s4);border-top:1px solid var(--border-sub);display:flex;gap:var(--s2);justify-content:flex-end;background:var(--surface-sub);border-radius:0 0 var(--r3) var(--r3)}
-        .Inline{display:flex;align-items:center;gap:var(--s2);flex-wrap:wrap}
-        .Steps{display:grid;gap:2px}
-        .Step{display:flex;gap:var(--s3);align-items:flex-start;padding:var(--s3);border-radius:var(--r2);background:var(--surface-sub);position:relative}
-        .Step__n{flex:0 0 auto;width:22px;height:22px;border-radius:50%;background:var(--surface);color:var(--text);border:1px solid var(--border-strong);display:grid;place-items:center;font-size:11px;font-weight:700}
-        .Step__b{flex:1;min-width:0}
-        .Step__t{font-size:13px;font-weight:600;line-height:18px;margin:0}
-        .Step__d{font-size:12px;color:var(--text-sub);line-height:16px;margin-top:1px}
-        .Step__v{flex:0 0 auto;font-size:12px;font-weight:600;text-align:right;padding-left:var(--s2)}
-        .Step--final{background:var(--succ-bg)}
-        .Step--final .Step__n{background:var(--succ-text);color:#fff;border-color:var(--succ-text)}
-        .Step--final .Step__d{color:#0C5132;opacity:.75}
-        .Step--stop{background:var(--warn-bg)}
-        .Step--stop .Step__n{background:var(--warn-text);color:#fff;border-color:var(--warn-text)}
-        .Step--stop .Step__d{color:var(--warn-text);opacity:.8}
+        .Pagination{display:flex;align-items:center;justify-content:space-between;padding:var(--s3) var(--s4);background:var(--surface-sub);border-top:1px solid var(--border-sub);border-radius:0 0 var(--r3) var(--r3)}
+        .Pagination__info{font-size:12px;color:var(--text-sub)}
+        .Pagination__btns{display:flex;align-items:center;gap:var(--s3)}
+        .Pagination__count{font-size:12px;color:var(--text-sub);font-weight:500}
+        
+        /* FULL JOURNEY TIMELINE STYLES */
         .Jn{position:relative;height:72px;margin:var(--s5) 0 var(--s3)}
         .Jn__rail{position:absolute;left:0;right:0;top:23px;height:3px;border-radius:2px;background:var(--border)}
         .Jn__done{position:absolute;top:23px;left:0;height:3px;border-radius:2px;background:#303030}
@@ -240,6 +240,32 @@ export default function Overview() {
         .Jn__dt{font-size:10.5px;color:var(--text-sub);line-height:14px;white-space:nowrap;font-family:var(--mono)}
         .Jn__now{position:absolute;top:8px;height:38px;width:1px;background:var(--text);opacity:.75}
         .Jn__nowl{position:absolute;top:-4px;transform:translateX(-50%);font-size:9.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text);white-space:nowrap}
+
+        /* MODAL STYLES */
+        .Backdrop{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:90;display:grid;place-items:center;padding:var(--s5);overflow-y:auto}
+        .Modal{background:var(--surface);border-radius:var(--r3);width:100%;max-width:520px;box-shadow:var(--sh-pop);max-height:88vh;display:flex;flex-direction:column}
+        .Modal__h{display:flex;align-items:center;gap:var(--s3);padding:var(--s4);border-bottom:1px solid var(--border-sub)}
+        .Modal__h h3{flex:1;font-size:15px;font-weight:650;margin:0}
+        .Modal__x{width:28px;height:28px;border:0;background:none;border-radius:var(--r1);color:var(--icon);display:grid;place-items:center;font-size:18px;line-height:1;cursor:pointer}
+        .Modal__x:hover{background:var(--surface-hover)}
+        .Modal__b{padding:var(--s4);overflow-y:auto}
+        .Modal__f{padding:var(--s3) var(--s4);border-top:1px solid var(--border-sub);display:flex;gap:var(--s2);justify-content:flex-end;background:var(--surface-sub);border-radius:0 0 var(--r3) var(--r3)}
+        .Inline{display:flex;align-items:center;gap:var(--s2);flex-wrap:wrap}
+
+        /* DECISION STEPS INSIDE MODAL */
+        .Steps{display:grid;gap:2px;margin-top:var(--s2)}
+        .Step{display:flex;gap:var(--s3);align-items:flex-start;padding:var(--s3);border-radius:var(--r2);background:var(--surface-sub);position:relative}
+        .Step__n{flex:0 0 auto;width:22px;height:22px;border-radius:50%;background:var(--surface);color:var(--text);border:1px solid var(--border-strong);display:grid;place-items:center;font-size:11px;font-weight:700}
+        .Step__b{flex:1;min-width:0}
+        .Step__t{font-size:13px;font-weight:600;line-height:18px;margin:0}
+        .Step__d{font-size:12px;color:var(--text-sub);line-height:16px;margin-top:1px}
+        .Step__v{flex:0 0 auto;font-size:12px;font-weight:600;text-align:right;padding-left:var(--s2)}
+        .Step--final{background:var(--succ-bg)}
+        .Step--final .Step__n{background:var(--succ-text);color:#fff;border-color:var(--succ-text)}
+        .Step--final .Step__d{color:#0C5132;opacity:.75}
+        .Step--stop{background:var(--warn-bg)}
+        .Step--stop .Step__n{background:var(--warn-text);color:#fff;border-color:var(--warn-text)}
+        .Step--stop .Step__d{color:var(--warn-text);opacity:.8}
       `}} />
     </>
   );
