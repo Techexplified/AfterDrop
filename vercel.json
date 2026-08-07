@@ -1,0 +1,9 @@
+{
+  "buildCommand": "prisma generate && remix vite:build",
+  "crons": [
+    {
+      "path": "/api/cron",
+      "schedule": "*/15 * * * *"
+    }
+  ]
+}
