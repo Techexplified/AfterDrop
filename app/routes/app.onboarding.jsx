@@ -494,12 +494,12 @@ export default function Onboarding() {
                 return (
                     <>
                         <p className="kicker">Step {currentNumberedStep} of {totalNumberedSteps} · test send</p>
-                        <h2>See one in your own inbox</h2>
+                        <h2>Send a preview to yourself</h2>
                         <p className="lede">
-                            Setup finishes in <b>test mode</b>: everything schedules exactly as if it were live, but every email routes to this one address. Nothing reaches a real customer until you flip the switch in Settings.
+                            Want to see how your emails look before finishing? Enter your email address below to dispatch an instant sample email to your inbox. This step is completely optional — you can skip it and continue anytime.
                         </p>
                         <div className="field">
-                            <label htmlFor="fMail">Your email</label>
+                            <label htmlFor="fMail">Your email address (Optional)</label>
                             <div className="testrow">
                                 <input
                                     className="txt"
@@ -514,10 +514,10 @@ export default function Onboarding() {
                                     onClick={handleSendTest}
                                     disabled={testFetcher.state !== "idle" || !formData.testEmail}
                                 >
-                                    {testFetcher.state !== "idle" ? "Sending..." : "Send me a test email"}
+                                    {testFetcher.state !== "idle" ? "Sending..." : "Send sample email"}
                                 </button>
                             </div>
-                            {/* <p className="hint">Sends a flagship placeholder email filled with real order data from your store.</p> */}
+                            {/* <p className="hint">Sends an instant sample email filled with real order data from your store to check layout and formatting[cite: 6].</p> */}
 
                             {testFetcher.data?.error && (
                                 <p style={{ color: "var(--stop)", fontSize: "12px", marginTop: "8px" }}>
@@ -530,7 +530,7 @@ export default function Onboarding() {
                             <div className="testok">
                                 <span>✓</span>
                                 <span>
-                                    <b>Test sent to {formData.testEmail}.</b> Check your inbox — the subject line should already feel like you wrote it. You can retest from Settings → Test mode any time.
+                                    <b>Sample email sent to {formData.testEmail}.</b> Check your inbox to verify layout and formatting[cite: 6]. You can send more sample emails anytime from Settings[cite: 6].
                                 </span>
                             </div>
                         )}
@@ -543,9 +543,9 @@ export default function Onboarding() {
                 return (
                     <>
                         <p className="kicker">Setup complete</p>
-                        <h2>Nothing sends until you say so.</h2>
+                        <h2>You're ready to go.</h2>
                         <p className="lede">
-                            Here is everything you chose, restated. AfterDrop is now watching deliveries in <b>test mode</b> — open the dashboard to watch the queue fill, then switch test mode off when it looks right.
+                            Here is everything you chose, restated. Click below to open your dashboard and start monitoring your post-purchase order queue.
                         </p>
                         <div className="sum">
                             <div className="sum-row">
@@ -566,10 +566,6 @@ export default function Onboarding() {
                             <div className="sum-row">
                                 <span>Templates</span>
                                 <span>{finalActive} of {TEMPLATES.length} active</span>
-                            </div>
-                            <div className="sum-row">
-                                <span>Mode</span>
-                                <span>Test mode — preview active</span>
                             </div>
                         </div>
                         <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", marginTop: "24px" }}>
