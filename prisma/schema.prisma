@@ -36,6 +36,7 @@ model Session {
 model ShopSettings {
   id           String   @id @default(cuid())
   shop         String   @unique
+  storeName    String?
   settleInDays Int      @default(3)
   sendHour     Int      @default(10)          // 0-23
   clockSource  String   @default("customer")  // "customer" | "store"
@@ -43,6 +44,7 @@ model ShopSettings {
   timezone     String   @default("Asia/Kolkata")
   noTracking   String   @default("fixed")     // "fixed" | "skip"
   noTrackDays  Int      @default(7)
+  isOnboarded  Boolean  @default(false)
   updatedAt    DateTime @updatedAt
 }
 
@@ -87,4 +89,11 @@ model Order {
   @@index([shop])
   @@index([customerId])
   @@index([shop, customerId])
+}
+
+model TemplateSettings {
+  id               String   @id @default(cuid())
+  shop             String   @unique
+  enabledTemplates String[] @default(["review"])
+  updatedAt        DateTime @updatedAt
 }
