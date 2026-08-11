@@ -35,15 +35,18 @@ export function setHourInTimezone(date, targetHour, timezone) {
 // ==========================================
 // 2. SUPPRESSION HELPER
 // ==========================================
-function runSuppressions(order, suppressionSettings, lastCustomerSendAt, templateId, templateName, sendAt, estimated) {
+function runSuppressions(order, suppressionSettings, lastOtherOrderSendAt, templateId, templateName, sendAt, estimated) {
   if (order.skippedByYou) return { state: "SUPPRESSED", reason: "Skipped by you", sendAt: null, templateId, templateName };
   if (suppressionSettings?.refundedCancelled && (order.cancelledAt || order.refundedAt)) return { state: "SUPPRESSED", reason: "Order refunded or cancelled", sendAt: null, templateId, templateName };
   if (suppressionSettings?.deliveryFailed && order.deliveryFailed) return { state: "SUPPRESSED", reason: "Delivery failed or returned", sendAt: null, templateId, templateName };
   if (suppressionSettings?.unsubscribed && order.unsubscribed) return { state: "SUPPRESSED", reason: "Customer unsubscribed", sendAt: null, templateId, templateName };
-  if (suppressionSettings?.cooldownEnabled && lastCustomerSendAt && templateId !== "careGuide") {
-    const cooldownEnd = addDays(lastCustomerSendAt, suppressionSettings.cooldownDays ?? 30);
+  
+  // ✅ FIX 2: Cooldown only applies if an email was sent for a DIFFERENT order within the window
+  if (suppressionSettings?.cooldownEnabled && lastOtherOrderSendAt) {
+    const cooldownEnd = addDays(lastOtherOrderSendAt, suppressionSettings.cooldownDays ?? 30);
     if (cooldownEnd > new Date()) return { state: "SUPPRESSED", reason: "Asked recently (cooldown)", sendAt: null, templateId, templateName };
   }
+
   if (order.customerTags?.some(t => suppressionSettings?.excludedTags?.includes(t))) return { state: "SUPPRESSED", reason: "Excluded customer tag", sendAt: null, templateId, templateName };
   if (order.productTypes?.some(t => suppressionSettings?.excludedProductTypes?.includes(t))) return { state: "SUPPRESSED", reason: "Excluded product type", sendAt: null, templateId, templateName };
 
@@ -55,9 +58,14 @@ function runSuppressions(order, suppressionSettings, lastCustomerSendAt, templat
 // ==========================================
 // 3. PURE SCHEDULING ENGINE
 // ==========================================
-export function schedule(order, shopSettings, suppressionSettings, templateSettings, lastCustomerSendAt, targetTemplateId) {
+export function schedule(order, shopSettings, suppressionSettings, templateSettings, lastOtherOrderSendAt, targetTemplateId) {
   let sentEmails = {};
   try { sentEmails = typeof order.sentEmails === "string" ? JSON.parse(order.sentEmails) : (order.sentEmails || {}); } catch (e) {}
+
+  // ✅ FIX 1: Legacy Support - If sentAt exists but JSON is empty, assume Review Request was sent
+  if (order.sentAt && Object.keys(sentEmails).length === 0) {
+    sentEmails["review"] = order.sentAt;
+  }
 
   let customConfigs = {};
   try { customConfigs = typeof templateSettings?.customConfigs === "string" ? JSON.parse(templateSettings.customConfigs) : (templateSettings?.customConfigs || {}); } catch (e) {}
@@ -82,7 +90,6 @@ export function schedule(order, shopSettings, suppressionSettings, templateSetti
     const baseTpl = TEMPLATES[targetTemplateId];
     if (!baseTpl) return { state: "SUPPRESSED", reason: "Invalid template", sendAt: null };
     
-    // If it's already sent, tell the Queue UI exactly when!
     if (sentEmails[targetTemplateId]) {
       return { state: "SENT", reason: `Sent: ${baseTpl.name}`, sendAt: new Date(sentEmails[targetTemplateId]), templateId: targetTemplateId, templateName: baseTpl.name };
     }
@@ -92,7 +99,7 @@ export function schedule(order, shopSettings, suppressionSettings, templateSetti
     tSendAt = setHourInTimezone(tSendAt, sendHour, timezone);
     let hops = 0; while (quietDays.includes(getDayOfWeekInTimezone(tSendAt, timezone)) && hops < 8) { tSendAt = addDays(tSendAt, 1); hops++; }
 
-    return runSuppressions(order, suppressionSettings, lastCustomerSendAt, targetTemplateId, baseTpl.name, tSendAt, estimated);
+    return runSuppressions(order, suppressionSettings, lastOtherOrderSendAt, targetTemplateId, baseTpl.name, tSendAt, estimated);
   }
 
   // --- PATH B: CRON JOB (FIND EARLIEST DUE) ---
@@ -113,7 +120,7 @@ export function schedule(order, shopSettings, suppressionSettings, templateSetti
   }
 
   if (!nextTemplate) return { state: "SENT", reason: "All active emails sent", sendAt: null };
-  return runSuppressions(order, suppressionSettings, lastCustomerSendAt, nextTemplate.id, nextTemplate.name, nextTemplate.sendAt, estimated);
+  return runSuppressions(order, suppressionSettings, lastOtherOrderSendAt, nextTemplate.id, nextTemplate.name, nextTemplate.sendAt, estimated);
 }
 
 // ==========================================
@@ -127,21 +134,30 @@ export async function scheduleAllOrders(shop, targetTemplateId = null) {
     db.templateSettings.findUnique({ where: { shop } }),
   ]);
 
-  const lastSendMap = new Map();
+  const lastOtherOrderSendMap = new Map();
+
   for (const o of orders) {
     if (!o.customerId) continue;
     let latest = o.sentAt ? new Date(o.sentAt) : null;
     let sEmails = {};
     try { sEmails = typeof o.sentEmails === "string" ? JSON.parse(o.sentEmails) : (o.sentEmails || {}); } catch(e){}
     for (const key in sEmails) { const d = new Date(sEmails[key]); if (!latest || d > latest) latest = d; }
+    
     if (latest) {
-      const current = lastSendMap.get(o.customerId);
-      if (!current || latest > current) lastSendMap.set(o.customerId, latest);
+      const existing = lastOtherOrderSendMap.get(o.customerId);
+      if (!existing || latest > existing.date) {
+        lastOtherOrderSendMap.set(o.customerId, { date: latest, orderId: o.id });
+      }
     }
   }
 
-  return orders.map((order) => ({
-    order,
-    ...schedule(order, shopSettings || {}, suppressionSettings || {}, templateSettings || {}, order.customerId ? lastSendMap.get(order.customerId) : null, targetTemplateId),
-  }));
+  return orders.map((order) => {
+    const customerLastSend = lastOtherOrderSendMap.get(order.customerId);
+    const lastOtherOrderDate = (customerLastSend && customerLastSend.orderId !== order.id) ? customerLastSend.date : null;
+
+    return {
+      order,
+      ...schedule(order, shopSettings || {}, suppressionSettings || {}, templateSettings || {}, lastOtherOrderDate, targetTemplateId),
+    };
+  });
 }
