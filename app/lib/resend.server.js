@@ -1,38 +1,91 @@
 import { Resend } from "resend";
+import { resolveTargetUrl, TEMPLATES } from "./template-defaults";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
-export async function sendReviewRequest({ email, customerName, orderName, shopName, product }) {
+function fillTokens(text, { customerName, orderName, productName, agoText }) {
+  if (!text) return "";
+  const first = customerName ? customerName.split(" ")[0] : "there";
+  return text
+    .replace(/\{first\}/g, first)
+    .replace(/\{product\}/g, productName || "item")
+    .replace(/\{order\}/g, orderName || "")
+    .replace(/\{ago\}/g, agoText || "recently");
+}
+
+export async function sendTemplateEmail({
+  to,
+  shop,
+  shopName,
+  orderName,
+  customerName,
+  product,
+  templateId,
+  customConfig = {},
+}) {
   try {
-    // Standard Sender Format: "Shop Name <email@domain.com>"
+    const baseTpl = TEMPLATES[templateId] || TEMPLATES.review;
+    const config = { ...baseTpl.config, ...customConfig };
+
+    const subject = fillTokens(config.subject, { customerName, orderName, productName: product?.name });
+    const headline = fillTokens(config.headline, { customerName, orderName, productName: product?.name });
+    const body = fillTokens(config.body, { customerName, orderName, productName: product?.name });
+    const buttonText = fillTokens(config.buttonText, { customerName, orderName, productName: product?.name });
+    const targetUrl = resolveTargetUrl(config.targetUrl, shop);
+
+    const isReview = templateId === "review";
+    const isPromo = templateId === "winback" || templateId === "referral";
+
     const sender = `${shopName || "AfterDrop"} <onboarding@resend.dev>`;
+
+    const html = `
+      <div style="font-family: -apple-system, sans-serif; padding: 20px; max-width: 580px; margin: 0 auto; text-align: center; color: #303030;">
+        <div style="font-size: 13px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; margin-bottom: 20px;">
+          ${shopName}
+        </div>
+        <h2 style="font-size: 20px; font-weight: 700; margin: 0 0 10px;">${headline}</h2>
+        <p style="font-size: 14px; line-height: 1.6; color: #5A5D63; margin: 0 0 20px;">${body}</p>
+
+        ${
+          isPromo && config.promoCode
+            ? `<div style="margin: 16px 0;">
+                <div style="display: inline-block; border: 1.5px dashed #303030; border-radius: 6px; padding: 8px 20px; font-family: monospace; font-size: 16px; font-weight: 700; background: #FAFAFA;">
+                  ${fillTokens(config.promoCode, { customerName })}
+                </div>
+                ${config.promoNote ? `<p style="font-size: 12px; color: #8C9098; margin: 6px 0 16px;">${fillTokens(config.promoNote, { customerName })}</p>` : ""}
+              </div>`
+            : ""
+        }
+
+        <div style="border: 1px solid #E5E6E9; padding: 12px; border-radius: 8px; margin: 20px 0; text-align: left; display: flex; align-items: center; gap: 12px;">
+          ${
+            product?.image
+              ? `<img src="${product.image}" alt="${product.name}" style="width: 56px; height: 56px; object-fit: cover; border-radius: 6px;" />`
+              : `<div style="width: 56px; height: 56px; background: #F0F1F3; border-radius: 6px;"></div>`
+          }
+          <div>
+            <strong style="display: block; font-size: 14px; color: #0A0A0A;">${product?.name || "Order Item"}</strong>
+            <span style="font-size: 12px; color: #8C9098;">Order ${orderName}</span>
+          </div>
+        </div>
+
+        ${
+          isReview
+            ? `<div style="font-size: 24px; color: #111; margin-bottom: 20px;">★ ★ ★ ★ ★</div>`
+            : ""
+        }
+
+        <a href="${targetUrl}" style="background: #000; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: 600; font-size: 13px;">
+          ${buttonText}
+        </a>
+      </div>
+    `;
 
     const data = await resend.emails.send({
       from: sender,
-      to: email,
-      subject: `How did we do on order ${orderName}?`,
-      html: `
-        <div style="font-family: sans-serif; padding: 20px; max-width: 600px; margin: 0 auto; text-align: center;">
-          <h2>Hey ${customerName},</h2>
-          <p>Your order <strong>${orderName}</strong> from <strong>${shopName}</strong> was recently delivered!</p>
-          <p>We'd love to hear your thoughts. Could you take a moment to leave a review?</p>
-          
-          <div style="border: 1px solid #ddd; padding: 15px; border-radius: 8px; margin: 20px 0; text-align: left; display: flex; align-items: center; gap: 15px;">
-            ${
-              product.image
-                ? `<img src="${product.image}" alt="${product.name}" style="width: 80px; height: 80px; object-fit: cover; border-radius: 6px;" />`
-                : `<div style="width: 80px; height: 80px; background-color: #f0f0f0; border-radius: 6px; display: flex; align-items: center; justify-content: center; color: #888; font-size: 11px; text-align: center;">No Image Available</div>`
-            }
-            <div>
-              <h3 style="margin: 0 0 5px 0; font-size: 16px;">${product.name}</h3>
-            </div>
-          </div>
-
-          <a href="#" style="background: black; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; display: inline-block; font-weight: bold;">
-            Write a Review
-          </a>
-        </div>
-      `,
+      to,
+      subject,
+      html,
     });
 
     return { success: true, data };

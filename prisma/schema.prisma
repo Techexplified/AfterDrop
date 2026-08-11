@@ -82,6 +82,7 @@ model Order {
   deliveryFailed      Boolean   @default(false)
   unsubscribed        Boolean   @default(false)
   sentAt              DateTime?
+  sentEmails          Json      @default("{}")
   skippedByYou        Boolean   @default(false)
   customerTimezone    String?       // NEW
   createdAt           DateTime  @default(now())
@@ -95,5 +96,6 @@ model TemplateSettings {
   id               String   @id @default(cuid())
   shop             String   @unique
   enabledTemplates String[] @default(["review"])
+  customConfigs    Json     @default("{}")
   updatedAt        DateTime @updatedAt
 }

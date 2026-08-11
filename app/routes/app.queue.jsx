@@ -5,7 +5,7 @@ import { scheduleAllOrders } from "../lib/schedule.server";
 import db from "../db.server";
 import { Journey } from "../components/queue/journey";
 import { OrderModal } from "../components/queue/ordermodal";
-import { sendReviewRequest } from "../lib/resend.server";
+import { TEMPLATES } from "../lib/template-defaults";
 
 const TABS = [
   { id: "SCHEDULED", label: "In the queue" },
@@ -24,9 +24,21 @@ const PAGE_SIZE = 5;
 export async function loader({ request }) {
   const { session } = await authenticate.admin(request);
   const url = new URL(request.url);
+  
   const stateFilter = url.searchParams.get("state") || "SCHEDULED";
+  const templateFilter = url.searchParams.get("template") || "review"; // Default to Review Request
 
-  const results = await scheduleAllOrders(session.shop);
+  // Get merchant's enabled templates for the dropdown
+  const templateSettings = await db.templateSettings.findUnique({ where: { shop: session.shop } });
+  const activeTpls = templateSettings?.enabledTemplates || ["review"];
+  
+  const enabledTemplates = activeTpls.map(id => ({
+    id,
+    name: TEMPLATES[id]?.name || id
+  }));
+
+  // ✅ Pass templateFilter to the scheduler so it evaluates EXACTLY this template
+  const results = await scheduleAllOrders(session.shop, templateFilter);
 
   results.sort((a, b) => {
     if (!a.sendAt) return 1;
@@ -34,11 +46,14 @@ export async function loader({ request }) {
     return new Date(a.sendAt) - new Date(b.sendAt);
   });
 
-  const filtered = stateFilter === "ALL" ? results : results.filter(r => r.state === stateFilter);
+  // Filter by the status tab (In Queue, Sending Today, etc.)
+  let filtered = results;
+  if (stateFilter !== "ALL") {
+    filtered = filtered.filter(r => r.state === stateFilter);
+  }
 
-  return data({ rows: filtered, stateFilter });
+  return data({ rows: filtered, stateFilter, templateFilter, enabledTemplates });
 }
-
 export async function action({ request }) {
   const { session } = await authenticate.admin(request);
   const shop = session.shop;
@@ -67,6 +82,8 @@ export async function action({ request }) {
       return data({ error: "Missing orderId" }, { status: 400 });
     }
 
+    const templateId = formData.get("templateId") || "review";
+
     const order = await db.order.findUnique({
       where: { id: orderId },
     });
@@ -74,6 +91,14 @@ export async function action({ request }) {
     if (!order) {
       return data({ error: "Order not found" }, { status: 404 });
     }
+
+    const templateSettings = await db.templateSettings.findUnique({ where: { shop } });
+    let customConfigs = {};
+    try {
+      customConfigs = typeof templateSettings?.customConfigs === "string"
+        ? JSON.parse(templateSettings.customConfigs)
+        : (templateSettings?.customConfigs || {});
+    } catch (e) {}
 
     const cleanShopName = session.shop
       .replace(".myshopify.com", "")
@@ -85,24 +110,36 @@ export async function action({ request }) {
       image: null,
     };
 
-    const emailResult = await sendReviewRequest({
-      email: order.customerEmail,
-      customerName: order.customerName || "there",
-      orderName: order.name,
+    // ✅ Dynamic import fixes the Vite plugin issue
+    const { sendTemplateEmail } = await import("../lib/resend.server");
+
+    const emailResult = await sendTemplateEmail({
+      to: order.customerEmail,
+      shop,
       shopName: cleanShopName,
+      orderName: order.name,
+      customerName: order.customerName || "there",
       product: featuredProduct,
+      templateId,
+      customConfig: customConfigs[templateId] || {},
     });
 
     if (emailResult.success) {
+      let currentSent = {};
+      try {
+        currentSent = typeof order.sentEmails === "string" ? JSON.parse(order.sentEmails) : (order.sentEmails || {});
+      } catch (e) {}
+
       await db.order.update({
         where: { id: orderId },
         data: {
+          sentEmails: { ...currentSent, [templateId]: new Date().toISOString() },
           sentAt: new Date(),
           skippedByYou: false,
         },
       });
 
-      return data({ success: true, message: `Review request sent for order ${order.name}` });
+      return data({ success: true, message: `Email sent for order ${order.name}` });
     } else {
       return data({ error: emailResult.error }, { status: 500 });
     }
@@ -121,7 +158,7 @@ function getInitials(name) {
 }
 
 export default function Queue() {
-  const { rows, stateFilter } = useLoaderData();
+  const { rows, stateFilter, templateFilter, enabledTemplates } = useLoaderData();
   const [searchParams, setSearchParams] = useSearchParams();
   const [activeModal, setActiveModal] = useState(null);
 
@@ -140,6 +177,13 @@ export default function Queue() {
     setSearchParams(newParams);
   };
 
+  const setTemplateFilter = (e) => {
+    const newParams = new URLSearchParams(searchParams);
+    newParams.set("template", e.target.value);
+    newParams.set("page", "1"); // Reset page on template switch
+    setSearchParams(newParams);
+  };
+
   const goToPage = (page) => {
     const newParams = new URLSearchParams(searchParams);
     newParams.set("page", page.toString());
@@ -154,8 +198,8 @@ export default function Queue() {
           <p className="pagehead__sub">Every open order and what AfterDrop intends to do with it.</p>
         </header>
 
-        {/* TABS */}
-        <div className="Filters">
+        {/* TABS & TEMPLATE DROPDOWN */}
+        <div className="Filters" style={{ justifyContent: "space-between" }}>
           <div className="Seg">
             {TABS.map((tab) => (
               <button
@@ -166,6 +210,19 @@ export default function Queue() {
                 {tab.label}
               </button>
             ))}
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <span style={{ fontSize: "12px", color: "var(--text-sub)", fontWeight: "500" }}>Showing:</span>
+            <select 
+              className="Select" 
+              value={templateFilter} 
+              onChange={setTemplateFilter}
+            >
+              {enabledTemplates.map(t => (
+                <option key={t.id} value={t.id}>{t.name}</option>
+              ))}
+            </select>
           </div>
         </div>
 
@@ -210,10 +267,20 @@ export default function Queue() {
                     <td className="end" style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
                       <button className="Btn Btn--sm" onClick={() => setActiveModal(row)}>Why?</button>
                       {(row.state === "SCHEDULED" || row.state === "DUE") && (
-                        <ActionForm intent="send-now" orderId={row.order.id} label="Send now" />
+                        <ActionForm 
+                          intent="send-now" 
+                          orderId={row.order.id} 
+                          templateId={row.templateId} 
+                          label="Send now" 
+                        />
                       )}
                       {row.state !== "SENT" && (
-                        <ActionForm intent="toggle-skip" orderId={row.order.id} label="Skip" />
+                        <ActionForm 
+                          intent="toggle-skip" 
+                          orderId={row.order.id} 
+                          templateId={row.templateId}
+                          label="Skip" 
+                        />
                       )}
                     </td>
                   </tr>
@@ -294,6 +361,10 @@ export default function Queue() {
         .Seg{display:inline-flex;background:var(--surface-sub);border-radius:var(--r2);padding:2px;gap:2px;border:1px solid var(--border-sub)}
         .Seg button{flex:1;height:28px;padding:0 var(--s3);border:0;background:none;border-radius:var(--r1);font-size:12px;font-weight:500;color:var(--text-sub);white-space:nowrap;cursor:pointer}
         .Seg button[aria-pressed="true"]{background:var(--surface);color:var(--text);font-weight:600;box-shadow:var(--sh-card)}
+
+        /* DROPDOWN SELECT */
+        .Select { height: 32px; padding: 0 32px 0 12px; border: 1px solid var(--border-strong); border-radius: var(--r2); background: var(--surface) url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' fill='none' stroke='%23303030' stroke-width='1.5'><path d='M1 1l4 4 4-4'/></svg>") no-repeat right 12px center; appearance: none; font-size: 13px; font-weight: 500; color: var(--text); cursor: pointer; box-shadow: var(--sh-card); }
+        .Select:focus { outline: 2px solid var(--focus); outline-offset: 1px; }
 
         /* TABLES */
         .Table{width:100%;border-collapse:collapse}
@@ -388,12 +459,13 @@ export default function Queue() {
 }
 
 // Small helper for standardizing the action buttons
-function ActionForm({ intent, orderId, label }) {
+function ActionForm({ intent, orderId, templateId, label }) {
   const fetcher = useFetcher();
   return (
     <fetcher.Form method="post">
       <input type="hidden" name="intent" value={intent} />
       <input type="hidden" name="orderId" value={orderId} />
+      {templateId && <input type="hidden" name="templateId" value={templateId} />}
       <button className="Btn Btn--sm" type="submit" disabled={fetcher.state !== "idle"}>
         {label}
       </button>
