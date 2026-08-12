@@ -46,6 +46,7 @@ export async function dispatchScheduledOrders() {
           product: featuredProduct,
           templateId: row.templateId,
           customConfig: customConfigs[row.templateId] || {},
+          reviewToken: order.reviewToken,
         });
 
         if (emailResult.success) {

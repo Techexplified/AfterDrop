@@ -122,6 +122,7 @@ export async function action({ request }) {
       product: featuredProduct,
       templateId,
       customConfig: customConfigs[templateId] || {},
+      reviewToken: order.reviewToken,
     });
 
     if (emailResult.success) {

@@ -22,6 +22,7 @@ export async function sendTemplateEmail({
   product,
   templateId,
   customConfig = {},
+  reviewToken, // <-- Accept the token
 }) {
   try {
     const baseTpl = TEMPLATES[templateId] || TEMPLATES.review;
@@ -31,10 +32,18 @@ export async function sendTemplateEmail({
     const headline = fillTokens(config.headline, { customerName, orderName, productName: product?.name });
     const body = fillTokens(config.body, { customerName, orderName, productName: product?.name });
     const buttonText = fillTokens(config.buttonText, { customerName, orderName, productName: product?.name });
-    const targetUrl = resolveTargetUrl(config.targetUrl, shop);
+    
+    // Setup Base URL & Default Target
+    const appUrl = process.env.SHOPIFY_APP_URL || "";
+    let targetUrl = resolveTargetUrl(config.targetUrl, shop);
 
     const isReview = templateId === "review";
     const isPromo = templateId === "winback" || templateId === "referral";
+
+    // ✅ Override the target URL for Review Requests to hit your public collection route
+    if (isReview && reviewToken && appUrl) {
+      targetUrl = `${appUrl}/review/${reviewToken}?rating=5`;
+    }
 
     const sender = `${shopName || "AfterDrop"} <onboarding@resend.dev>`;
 
@@ -71,7 +80,11 @@ export async function sendTemplateEmail({
 
         ${
           isReview
-            ? `<div style="font-size: 24px; color: #111; margin-bottom: 20px;">★ ★ ★ ★ ★</div>`
+            ? `<div style="margin-bottom: 20px;">
+                 ${[1, 2, 3, 4, 5].map(star => 
+                   `<a href="${appUrl && reviewToken ? `${appUrl}/review/${reviewToken}?rating=${star}` : '#'}" style="font-size: 28px; color: #111; text-decoration: none; padding: 0 4px;">★</a>`
+                 ).join("")}
+               </div>`
             : ""
         }
 
