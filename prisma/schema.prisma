@@ -85,6 +85,8 @@ model Order {
   sentEmails          Json      @default("{}")
   skippedByYou        Boolean   @default(false)
   customerTimezone    String?       // NEW
+  reviewToken         String?  @unique @default(cuid())
+  reviews             Review[] // Relation to the new Review model
   createdAt           DateTime  @default(now())
 
   @@index([shop])
@@ -98,4 +100,18 @@ model TemplateSettings {
   enabledTemplates String[] @default(["review"])
   customConfigs    Json     @default("{}")
   updatedAt        DateTime @updatedAt
+}
+
+model Review {
+  id          String   @id @default(cuid())
+  shop        String
+  orderId     String
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  displayName String?
+  rating      Int
+  body        String?  @db.Text
+  createdAt   DateTime @default(now())
+
+  @@index([shop])
+  @@index([orderId])
 }
