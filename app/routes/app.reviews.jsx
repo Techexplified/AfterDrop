@@ -9,16 +9,50 @@ export async function loader({ request }) {
     const url = new URL(request.url);
     const shop = session.shop;
 
-    // 1. Get raw page parameter
+    // --- 1. CSV EXPORT HANDLER ---
+    if (url.searchParams.get("export") === "true") {
+        const allReviews = await db.review.findMany({
+            where: { shop },
+            orderBy: { createdAt: "desc" },
+            include: {
+                order: {
+                    select: { name: true, customerEmail: true, customerName: true }
+                }
+            }
+        });
+
+        const headers = ["Review ID", "Order Name", "Customer Name", "Customer Email", "Rating", "Review Body", "Date"];
+        const escapeCsv = (str) => `"${String(str || "").replace(/"/g, '""')}"`;
+
+        const csvRows = allReviews.map((r) => [
+            escapeCsv(r.id),
+            escapeCsv(r.order?.name || "—"),
+            escapeCsv(r.displayName || r.order?.customerName || "Guest"),
+            escapeCsv(r.order?.customerEmail || "—"),
+            escapeCsv(r.rating),
+            escapeCsv(r.body),
+            escapeCsv(new Date(r.createdAt).toISOString()),
+        ].join(","));
+
+        const csvContent = [headers.join(","), ...csvRows].join("\n");
+
+        return new Response(csvContent, {
+            status: 200,
+            headers: {
+                "Content-Type": "text/csv; charset=utf-8",
+                "Content-Disposition": `attachment; filename="afterdrop-reviews-${new Date().toISOString().slice(0, 10)}.csv"`,
+            },
+        });
+    }
+
+    // --- 2. PAGINATED DASHBOARD LOADER ---
     const rawPage = parseInt(url.searchParams.get("page") || "1", 10);
     const requestedPage = Math.max(1, isNaN(rawPage) ? 1 : rawPage);
 
-    // 2. Count total reviews for accurate pagination math
     const totalReviews = await db.review.count({ where: { shop } });
     const totalPages = Math.max(1, Math.ceil(totalReviews / PAGE_SIZE));
     const currentPage = Math.min(requestedPage, totalPages);
 
-    // 3. Fetch only the exact 10 reviews needed for this page
     const reviews = await db.review.findMany({
         where: { shop },
         orderBy: { createdAt: "desc" },
@@ -26,7 +60,7 @@ export async function loader({ request }) {
         take: PAGE_SIZE,
         include: {
             order: {
-                select: { name: true }
+                select: { name: true, customerEmail: true, customerName: true }
             }
         }
     });
@@ -42,7 +76,6 @@ function getInitials(name) {
     }
     return name.substring(0, 2).toUpperCase();
 }
-
 
 export default function ReviewsDashboard() {
     const { reviews, totalReviews, currentPage, totalPages } = useLoaderData();
@@ -77,7 +110,8 @@ export default function ReviewsDashboard() {
                         >
                             {revalidator.state === "loading" ? "Refreshing..." : "Refresh"}
                         </button>
-                        <a href="/app/reviews/export" download className="Btn">
+                        {/* Point directly to this route with export=true */}
+                        <a href="/app/reviews?export=true" download className="Btn">
                             Export CSV
                         </a>
                     </div>
@@ -104,33 +138,38 @@ export default function ReviewsDashboard() {
                                     </td>
                                 </tr>
                             ) : (
-                                reviews.map((review) => (
-                                    <tr key={review.id}>
-                                        <td>
-                                            <div className="Who">
-                                                <span className="Ava">{getInitials(review.displayName || review.customerName)}</span>
-                                                <div>
-                                                    <b>{review.displayName || review.customerName || "Guest"}</b>
-                                                    <span>{review.customerEmail}</span>
+                                reviews.map((review) => {
+                                    const customerName = review.displayName || review.order?.customerName || "Guest";
+                                    const customerEmail = review.order?.customerEmail || "—";
+
+                                    return (
+                                        <tr key={review.id}>
+                                            <td>
+                                                <div className="Who">
+                                                    <span className="Ava">{getInitials(customerName)}</span>
+                                                    <div>
+                                                        <b>{customerName}</b>
+                                                        <span>{customerEmail}</span>
+                                                    </div>
                                                 </div>
-                                            </div>
-                                        </td>
-                                        <td>{review.order?.name || "—"}</td>
-                                        <td>
-                                            <span style={{ color: "#FFB800", fontSize: "16px", letterSpacing: "2px" }}>
-                                                {"★".repeat(review.rating)}{"☆".repeat(5 - review.rating)}
-                                            </span>
-                                        </td>
-                                        <td style={{ maxWidth: "340px", whiteSpace: "normal" }}>
-                                            <p style={{ margin: 0, fontSize: "13px", color: "var(--text)", lineHeight: "1.4" }}>
-                                                {review.body || <i style={{ color: "var(--text-dis)" }}>No text provided</i>}
-                                            </p>
-                                        </td>
-                                        <td className="end rowsub mono" style={{ verticalAlign: "middle" }}>
-                                            {new Date(review.createdAt).toLocaleDateString()}
-                                        </td>
-                                    </tr>
-                                ))
+                                            </td>
+                                            <td>{review.order?.name || "—"}</td>
+                                            <td>
+                                                <span style={{ color: "#FFB800", fontSize: "16px", letterSpacing: "2px" }}>
+                                                    {"★".repeat(review.rating)}{"☆".repeat(5 - review.rating)}
+                                                </span>
+                                            </td>
+                                            <td style={{ maxWidth: "340px", whiteSpace: "normal" }}>
+                                                <p style={{ margin: 0, fontSize: "13px", color: "var(--text)", lineHeight: "1.4" }}>
+                                                    {review.body || <i style={{ color: "var(--text-dis)" }}>No text provided</i>}
+                                                </p>
+                                            </td>
+                                            <td className="end rowsub mono" style={{ verticalAlign: "middle" }}>
+                                                {new Date(review.createdAt).toLocaleDateString()}
+                                            </td>
+                                        </tr>
+                                    );
+                                })
                             )}
                         </tbody>
                     </table>
@@ -165,7 +204,7 @@ export default function ReviewsDashboard() {
                 </div>
             </div>
 
-            {/* INJECTED STYLES (Identical to app.queue.jsx) */}
+            {/* INJECTED STYLES */}
             <style dangerouslySetInnerHTML={{
                 __html: `
         /* CORE VARIABLES & FONT BASE */
