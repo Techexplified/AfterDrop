@@ -22,7 +22,7 @@ export async function sendTemplateEmail({
   product,
   templateId,
   customConfig = {},
-  reviewToken, // <-- Accept the token
+  reviewToken,
 }) {
   try {
     const baseTpl = TEMPLATES[templateId] || TEMPLATES.review;
@@ -32,7 +32,7 @@ export async function sendTemplateEmail({
     const headline = fillTokens(config.headline, { customerName, orderName, productName: product?.name });
     const body = fillTokens(config.body, { customerName, orderName, productName: product?.name });
     const buttonText = fillTokens(config.buttonText, { customerName, orderName, productName: product?.name });
-    
+
     // Setup Base URL & Default Target
     const appUrl = process.env.SHOPIFY_APP_URL || "";
     let targetUrl = resolveTargetUrl(config.targetUrl, shop);
@@ -40,7 +40,6 @@ export async function sendTemplateEmail({
     const isReview = templateId === "review";
     const isPromo = templateId === "winback" || templateId === "referral";
 
-    // ✅ Override the target URL for Review Requests to hit your public collection route
     if (isReview && reviewToken && appUrl) {
       targetUrl = `${appUrl}/review/${reviewToken}?rating=5`;
     }
@@ -55,42 +54,52 @@ export async function sendTemplateEmail({
         <h2 style="font-size: 20px; font-weight: 700; margin: 0 0 10px;">${headline}</h2>
         <p style="font-size: 14px; line-height: 1.6; color: #5A5D63; margin: 0 0 20px;">${body}</p>
 
-        ${
-          isPromo && config.promoCode
-            ? `<div style="margin: 16px 0;">
+        ${isPromo && config.promoCode
+        ? `<div style="margin: 16px 0;">
                 <div style="display: inline-block; border: 1.5px dashed #303030; border-radius: 6px; padding: 8px 20px; font-family: monospace; font-size: 16px; font-weight: 700; background: #FAFAFA;">
                   ${fillTokens(config.promoCode, { customerName })}
                 </div>
                 ${config.promoNote ? `<p style="font-size: 12px; color: #8C9098; margin: 6px 0 16px;">${fillTokens(config.promoNote, { customerName })}</p>` : ""}
               </div>`
-            : ""
-        }
+        : ""
+      }
 
         <div style="border: 1px solid #E5E6E9; padding: 12px; border-radius: 8px; margin: 20px 0; text-align: left; display: flex; align-items: center; gap: 12px;">
-          ${
-            product?.image
-              ? `<img src="${product.image}" alt="${product.name}" style="width: 56px; height: 56px; object-fit: cover; border-radius: 6px;" />`
-              : `<div style="width: 56px; height: 56px; background: #F0F1F3; border-radius: 6px;"></div>`
-          }
+          ${product?.image
+        ? `<img src="${product.image}" alt="${product.name}" style="width: 56px; height: 56px; object-fit: cover; border-radius: 6px;" />`
+        : `<div style="width: 56px; height: 56px; background: #F0F1F3; border-radius: 6px;"></div>`
+      }
           <div>
             <strong style="display: block; font-size: 14px; color: #0A0A0A;">${product?.name || "Order Item"}</strong>
             <span style="font-size: 12px; color: #8C9098;">Order ${orderName}</span>
           </div>
         </div>
 
-        ${
-          isReview
-            ? `<div style="margin-bottom: 20px;">
-                 ${[1, 2, 3, 4, 5].map(star => 
-                   `<a href="${appUrl && reviewToken ? `${appUrl}/review/${reviewToken}?rating=${star}` : '#'}" style="font-size: 28px; color: #111; text-decoration: none; padding: 0 4px;">★</a>`
-                 ).join("")}
+        ${isReview
+        ? `<div style="margin-bottom: 20px;">
+                 ${[1, 2, 3, 4, 5]
+          .map(
+            (star) =>
+              `<a href="${appUrl && reviewToken ? `${appUrl}/review/${reviewToken}?rating=${star}` : "#"
+              }" style="font-size: 28px; color: #111; text-decoration: none; padding: 0 4px;">★</a>`
+          )
+          .join("")}
                </div>`
-            : ""
-        }
+        : ""
+      }
 
         <a href="${targetUrl}" style="background: #000; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: 600; font-size: 13px;">
           ${buttonText}
         </a>
+
+        <!-- UNSUBSCRIBE FOOTER -->
+        <div style="margin-top: 32px; font-size: 11px; color: #8C9098; text-align: center;">
+          <p style="margin: 0 0 4px 0;">Sent by ${shopName}</p>
+          ${reviewToken && appUrl
+        ? `<a href="${appUrl}/unsubscribe/${reviewToken}" style="color: #8C9098; text-decoration: underline;">Unsubscribe from emails</a>`
+        : ""
+      }
+        </div>
       </div>
     `;
 

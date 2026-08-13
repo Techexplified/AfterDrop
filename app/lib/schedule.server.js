@@ -39,9 +39,10 @@ function runSuppressions(order, suppressionSettings, lastOtherOrderSendAt, templ
   if (order.skippedByYou) return { state: "SUPPRESSED", reason: "Skipped by you", sendAt: null, templateId, templateName };
   if (suppressionSettings?.refundedCancelled && (order.cancelledAt || order.refundedAt)) return { state: "SUPPRESSED", reason: "Order refunded or cancelled", sendAt: null, templateId, templateName };
   if (suppressionSettings?.deliveryFailed && order.deliveryFailed) return { state: "SUPPRESSED", reason: "Delivery failed or returned", sendAt: null, templateId, templateName };
+  
+  // THE UNSUBSCRIBE GUARDRAIL
   if (suppressionSettings?.unsubscribed && order.unsubscribed) return { state: "SUPPRESSED", reason: "Customer unsubscribed", sendAt: null, templateId, templateName };
   
-  // ✅ FIX 2: Cooldown only applies if an email was sent for a DIFFERENT order within the window
   if (suppressionSettings?.cooldownEnabled && lastOtherOrderSendAt) {
     const cooldownEnd = addDays(lastOtherOrderSendAt, suppressionSettings.cooldownDays ?? 30);
     if (cooldownEnd > new Date()) return { state: "SUPPRESSED", reason: "Asked recently (cooldown)", sendAt: null, templateId, templateName };
@@ -62,7 +63,6 @@ export function schedule(order, shopSettings, suppressionSettings, templateSetti
   let sentEmails = {};
   try { sentEmails = typeof order.sentEmails === "string" ? JSON.parse(order.sentEmails) : (order.sentEmails || {}); } catch (e) {}
 
-  // ✅ FIX 1: Legacy Support - If sentAt exists but JSON is empty, assume Review Request was sent
   if (order.sentAt && Object.keys(sentEmails).length === 0) {
     sentEmails["review"] = order.sentAt;
   }

@@ -74,6 +74,21 @@ export async function formatAndUpsertOrder(dbClient, shop, node) {
     const customerEmail = cust?.email ?? null;
     const customerId = cust?.id ?? null;
 
+    // THE FIX: Added await, and strictly filtered by shop, email, and unsubscribed status.
+    let isUnsubscribed = false;
+    if (customerEmail) {
+        const previousOptOut = await dbClient.order.findFirst({
+            where: {
+                shop: shop,
+                customerEmail: customerEmail,
+                unsubscribed: true
+            },
+        });
+        if (previousOptOut) {
+            isUnsubscribed = true;
+        }
+    }
+
     const sharedData = {
         customerName,
         customerEmail,
@@ -84,10 +99,11 @@ export async function formatAndUpsertOrder(dbClient, shop, node) {
         trackingNumber: fulfillment?.trackingInfo?.[0]?.number ?? null,
         deliveredAt: deliveryEvent?.happenedAt ? new Date(deliveryEvent.happenedAt) : null,
         cancelledAt: node.cancelledAt ? new Date(node.cancelledAt) : null,
+        unsubscribed: isUnsubscribed, // Passes the boolean directly
     };
 
     return await dbClient.order.upsert({
-        where: {id: node.id},
+        where: { id: node.id },
         update: sharedData,
         create: {
             id: node.id,
