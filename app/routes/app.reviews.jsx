@@ -80,7 +80,6 @@ export default function ReviewsDashboard() {
                         >
                             {revalidator.state === "loading" ? "Refreshing..." : "Refresh"}
                         </button>
-                        {/* Point directly to this route with export=true */}
                         <a href="/app/reviews?export=true" download className="Btn">
                             Export CSV
                         </a>
@@ -92,17 +91,18 @@ export default function ReviewsDashboard() {
                     <table className="Table">
                         <thead>
                             <tr>
-                                <th>Customer</th>
-                                <th>Order</th>
-                                <th>Rating</th>
-                                <th>Review</th>
-                                <th className="end">Date</th>
+                                <th style={{ width: "22%" }}>Customer</th>
+                                <th style={{ width: "12%" }}>Order</th>
+                                <th style={{ width: "20%" }}>Product</th>
+                                <th style={{ width: "14%" }}>Rating</th>
+                                <th style={{ width: "22%" }}>Review</th>
+                                <th className="end" style={{ width: "10%" }}>Date</th>
                             </tr>
                         </thead>
                         <tbody>
                             {reviews.length === 0 ? (
                                 <tr>
-                                    <td colSpan="5" className="Empty">
+                                    <td colSpan="6" className="Empty">
                                         <b>No reviews yet</b>
                                         <p>Once customers submit feedback, it will appear here.</p>
                                     </td>
@@ -123,13 +123,18 @@ export default function ReviewsDashboard() {
                                                     </div>
                                                 </div>
                                             </td>
-                                            <td>{review.order?.name || "—"}</td>
+                                            <td className="mono" style={{ fontWeight: 600 }}>
+                                                {review.order?.name || "—"}
+                                            </td>
+                                            <td style={{ fontWeight: 500 }}>
+                                                {review.productName || "General Store Review"}
+                                            </td>
                                             <td>
-                                                <span style={{ color: "#FFB800", fontSize: "16px", letterSpacing: "2px" }}>
+                                                <span style={{ color: "#FFB800", fontSize: "15px", letterSpacing: "1px" }}>
                                                     {"★".repeat(review.rating)}{"☆".repeat(5 - review.rating)}
                                                 </span>
                                             </td>
-                                            <td style={{ maxWidth: "340px", whiteSpace: "normal" }}>
+                                            <td style={{ maxWidth: "280px", whiteSpace: "normal" }}>
                                                 <p style={{ margin: 0, fontSize: "13px", color: "var(--text)", lineHeight: "1.4" }}>
                                                     {review.body || <i style={{ color: "var(--text-dis)" }}>No text provided</i>}
                                                 </p>
@@ -177,18 +182,15 @@ export default function ReviewsDashboard() {
             {/* INJECTED STYLES */}
             <style dangerouslySetInnerHTML={{
                 __html: `
-        /* CORE VARIABLES & FONT BASE */
         :root{--bg:#F1F1F1;--surface:#FFFFFF;--surface-sub:#F7F7F7;--surface-hover:#F1F1F1;--border:#E3E3E3;--border-sub:#EBEBEB;--border-strong:#CDCDCD;--text:#303030;--text-sub:#616161;--text-dis:#8A8A8A;--ink:#3B2E63;--ink-tint:#F4F2FC;--ink-edge:#DCD6F5;--mono:'IBM Plex Mono',ui-monospace,'SF Mono',Menlo,monospace;--r1:6px;--r2:8px;--r3:12px;--s1:4px;--s2:8px;--s3:12px;--s4:16px;--s5:20px;--sh-card:0 1px 0 0 rgba(26,26,26,.07);}
 
         body, button, input, select, textarea {
           font-family: -apple-system, BlinkMacSystemFont, "San Francisco", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
         }
 
-        /* TYPOGRAPHY */
         .t-xl{font-size:28px;line-height:24px;font-weight:700;letter-spacing:-.01em;margin:0;}
         .mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
 
-        /* LAYOUT & CHROME */
         .pagehead__sub{color:var(--text-sub);font-size:15px;margin-top:var(--s1);max-width:66ch}
         .Card{background:var(--surface);border-radius:var(--r3);box-shadow:var(--sh-card);border:1px solid var(--border-sub);padding:var(--s4);margin-bottom:var(--s4)}
         .Card--flush{padding:0}
@@ -196,7 +198,6 @@ export default function ReviewsDashboard() {
         .Empty b{display:block;font-size:13px;font-weight:650;margin-bottom:4px}
         .Empty p{font-size:13px;color:var(--text-sub);margin:0 auto}
 
-        /* TABLES */
         .Table{width:100%;border-collapse:collapse}
         .Table th{text-align:left;font-size:12px;font-weight:600;color:var(--text-sub);padding:var(--s2) var(--s4);border-bottom:1px solid var(--border-sub);background:var(--surface-sub);white-space:nowrap}
         .Table td{padding:var(--s3) var(--s4);border-bottom:1px solid var(--border-sub);vertical-align:middle;font-size:13px}
@@ -204,19 +205,16 @@ export default function ReviewsDashboard() {
         .Table .end{text-align:right;white-space:nowrap}
         .rowsub{font-size:12px;color:var(--text-sub);line-height:16px;display:block;margin-top:1px}
 
-        /* PAGINATION */
         .Pagination{display:flex;align-items:center;justify-content:space-between;padding:var(--s3) var(--s4);background:var(--surface-sub);border-top:1px solid var(--border-sub);border-radius:0 0 var(--r3) var(--r3)}
         .Pagination__info{font-size:12px;color:var(--text-sub)}
         .Pagination__btns{display:flex;align-items:center;gap:var(--s3)}
         .Pagination__count{font-size:12px;color:var(--text-sub);font-weight:500}
 
-        /* PEOPLE & AVATARS */
         .Who{display:flex !important;align-items:center !important;gap:12px !important;min-width:0}
         .Who b{font-weight:600;display:block;line-height:17px;color:var(--text)}
         .Who span{font-size:12px;color:var(--text-sub);display:block;line-height:16px}
         .Ava{width:28px !important;height:28px !important;border-radius:50% !important;background:var(--ink-tint) !important;color:var(--ink) !important;display:inline-flex !important;align-items:center !important;justify-content:center !important;font-size:11px !important;font-weight:700 !important;line-height:1 !important;text-align:center !important;padding:0 !important;margin:0 !important;flex:0 0 auto !important;border:1px solid var(--ink-edge) !important}
 
-        /* BUTTONS */
         .Btn{height:32px;padding:0 12px;border:0;border-radius:var(--r2);background:var(--surface);color:var(--text);box-shadow:0 0 0 1px rgba(0,0,0,.08) inset, 0 -1px 0 0 #B5B5B5 inset, 0 1px 0 0 rgba(255,255,255,.48) inset;font-size:13px;font-weight:600;line-height:32px;display:inline-flex;align-items:center;cursor:pointer;text-decoration:none;}
         .Btn:hover{background:#F7F7F7}
         .Btn--sm{height:28px;padding:0 8px;font-size:12px;line-height:28px}

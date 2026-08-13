@@ -1,5 +1,23 @@
 import db from "../db.server";
 
+// Helper to auto-generate a fallback review title based on rating
+function generateReviewTitle(rating) {
+  switch (Number(rating)) {
+    case 5:
+      return "Great product!";
+    case 4:
+      return "Good quality";
+    case 3:
+      return "Average experience";
+    case 2:
+      return "Needs improvement";
+    case 1:
+      return "Disappointed";
+    default:
+      return "Customer Review";
+  }
+}
+
 export async function generateReviewsCsvResponse(shop) {
   const allReviews = await db.review.findMany({
     where: { shop },
@@ -11,16 +29,38 @@ export async function generateReviewsCsvResponse(shop) {
     }
   });
 
-  const headers = ["Review ID", "Order Name", "Customer Name", "Customer Email", "Rating", "Review Body", "Date"];
+  // Industry-Standard Importable Headers
+  const headers = [
+    "id",
+    "shop",
+    "productId",
+    "productName",
+    "rating",
+    "title",
+    "comment",
+    "author",
+    "email",
+    "status",
+    "reply",
+    "replyDate",
+    "createdAt"
+  ];
+
   const escapeCsv = (str) => `"${String(str || "").replace(/"/g, '""')}"`;
 
   const csvRows = allReviews.map((r) => [
     escapeCsv(r.id),
-    escapeCsv(r.order?.name || "—"),
-    escapeCsv(r.displayName || r.order?.customerName || "Guest"),
-    escapeCsv(r.order?.customerEmail || "—"),
+    escapeCsv(r.shop),
+    escapeCsv(r.productId || ""),
+    escapeCsv(r.productName || ""),
     escapeCsv(r.rating),
-    escapeCsv(r.body),
+    escapeCsv(generateReviewTitle(r.rating)), // Auto-generated headline
+    escapeCsv(r.body),                        // Review comment
+    escapeCsv(r.displayName || r.order?.customerName || "Guest"),
+    escapeCsv(r.order?.customerEmail || ""),
+    escapeCsv("published"),                   // Default status
+    escapeCsv(""),                            // Blank reply
+    escapeCsv(""),                            // Blank replyDate
     escapeCsv(new Date(r.createdAt).toISOString()),
   ].join(","));
 

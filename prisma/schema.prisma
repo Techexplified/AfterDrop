@@ -85,6 +85,8 @@ model Order {
   sentEmails          Json      @default("{}")
   skippedByYou        Boolean   @default(false)
   customerTimezone    String?       // NEW
+  primaryProductId    String?
+  primaryProductName  String?
   reviewToken         String?  @unique @default(cuid())
   reviews             Review[] // Relation to the new Review model
   createdAt           DateTime  @default(now())
@@ -107,6 +109,8 @@ model Review {
   shop        String
   orderId     String
   order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId   String?
+  productName String?
   displayName String?
   rating      Int
   body        String?  @db.Text

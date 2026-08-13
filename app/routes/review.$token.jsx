@@ -5,7 +5,7 @@ import db from "../db.server";
 export async function loader({ params, request }) {
     const { token } = params;
     const url = new URL(request.url);
-    const initalRating = url.searchParams.get("rating") || "5";
+    const initialRating = url.searchParams.get("rating") || "5";
 
     const order = await db.order.findUnique({
         where: { reviewToken: token },
@@ -23,9 +23,9 @@ export async function loader({ params, request }) {
 
     return data({
         shopName: shopSettings?.storeName || fallbackShopName,
-        orderName: order.id,
+        orderName: order.name, // Usually better to show the short order # (e.g. #1001) instead of the long ID
         customerName: order.customerName || "",
-        initalRating: parseInt(initalRating, 10),
+        initialRating: parseInt(initialRating, 10),
     });
 }
 
@@ -47,13 +47,16 @@ export async function action({ request, params }) {
         data: {
             shop: order.shop,
             orderId: order.id,
+            // NEW: Inherit the product data directly from the Order staging fields
+            productId: order.primaryProductId,
+            productName: order.primaryProductName,
             displayName: displayName || order.customerName,
             rating,
             body,
         },
     });
 
-    return data({ succes: true });
+    return data({ success: true }); // Fixed typo so the success UI renders
 }
 
 export default function PublicReviewPage() {

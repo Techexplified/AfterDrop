@@ -1,5 +1,6 @@
 import db from "../db.server";
 
+// 1. Updated GraphQL Query: Fetching product id & title for line items
 const ORDER_QUERY = `#graphql
   query getOrderForSync($id: ID!) {
     order(id: $id) {
@@ -23,7 +24,16 @@ const ORDER_QUERY = `#graphql
         }
       }
       lineItems(first: 10) {
-        edges { node { product { productType } } }
+        edges {
+          node {
+            title
+            product {
+              id
+              title
+              productType
+            }
+          }
+        }
       }
     }
   }
@@ -59,6 +69,14 @@ export async function formatAndUpsertOrder(dbClient, shop, node) {
         )
     );
 
+    // 2. Extract Primary Product Info for Review CSV Export
+    const firstLineItem = node.lineItems?.edges?.[0]?.node;
+    const primaryProductId = firstLineItem?.product?.id ?? null;
+    const primaryProductName =
+        firstLineItem?.product?.title ||
+        firstLineItem?.title ||
+        null;
+
     const cust = node.customer;
 
     const fullName = cust
@@ -74,7 +92,6 @@ export async function formatAndUpsertOrder(dbClient, shop, node) {
     const customerEmail = cust?.email ?? null;
     const customerId = cust?.id ?? null;
 
-    // THE FIX: Added await, and strictly filtered by shop, email, and unsubscribed status.
     let isUnsubscribed = false;
     if (customerEmail) {
         const previousOptOut = await dbClient.order.findFirst({
@@ -95,11 +112,13 @@ export async function formatAndUpsertOrder(dbClient, shop, node) {
         customerId,
         customerTags: cust?.tags ?? [],
         productTypes,
+        primaryProductId,
+        primaryProductName,
         totalPrice: Math.round(Number(node.totalPriceSet?.shopMoney?.amount || 0) * 100),
         trackingNumber: fulfillment?.trackingInfo?.[0]?.number ?? null,
         deliveredAt: deliveryEvent?.happenedAt ? new Date(deliveryEvent.happenedAt) : null,
         cancelledAt: node.cancelledAt ? new Date(node.cancelledAt) : null,
-        unsubscribed: isUnsubscribed, // Passes the boolean directly
+        unsubscribed: isUnsubscribed,
     };
 
     return await dbClient.order.upsert({
