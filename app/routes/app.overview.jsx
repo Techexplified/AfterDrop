@@ -5,6 +5,7 @@ import { scheduleAllOrders } from "../lib/schedule.server";
 import db from "../db.server";
 import { Journey } from "../components/queue/journey";
 import { OrderModal } from "../components/queue/ordermodal";
+import { TEMPLATES } from "../lib/template-defaults";
 
 const PAGE_SIZE = 5;
 
@@ -14,7 +15,7 @@ export async function loader({ request }) {
   const url = new URL(request.url);
   const page = Math.max(1, parseInt(url.searchParams.get("page") || "1", 10));
 
-  const [results, shopSettings, sentTotal, recentSent] = await Promise.all([
+  const [results, shopSettings, sentTotal, rawRecentSent] = await Promise.all([
     scheduleAllOrders(shop),
     db.shopSettings.findUnique({ where: { shop } }),
     db.order.count({ where: { shop, sentAt: { not: null } } }),
@@ -35,6 +36,25 @@ export async function loader({ request }) {
   const upcoming = results
     .filter((r) => (r.state === "SCHEDULED" || r.state === "DUE") && r.sendAt)
     .sort((a, b) => new Date(a.sendAt) - new Date(b.sendAt));
+
+  const recentSent = rawRecentSent.map(order => {
+    let sentEmailsObj = {};
+    try {
+      sentEmailsObj = typeof order.sentEmails === "string" 
+        ? JSON.parse(order.sentEmails) 
+        : (order.sentEmails || {});
+    } catch(e) {}
+
+    const sentTemplateNames = Object.keys(sentEmailsObj).map(
+      key => TEMPLATES[key]?.name || key
+    );
+
+    if (order.sentAt && sentTemplateNames.length === 0) {
+      sentTemplateNames.push(TEMPLATES["review"].name);
+    }
+
+    return { ...order, sentTemplateNames };
+  });
 
   return data({
     nextRequest: upcoming[0] || null,
@@ -67,7 +87,6 @@ export default function Overview() {
 
   const due = nextRequest && new Date(nextRequest.sendAt) <= new Date();
 
-  // Pagination calculations
   const startIndex = (page - 1) * PAGE_SIZE;
   const endIndex = Math.min(page * PAGE_SIZE, sentTotal);
 
@@ -77,18 +96,23 @@ export default function Overview() {
         <header className="pagehead">
           <h1 className="t-xl">Overview</h1>
           <p className="pagehead__sub">
-            Review requests go out a set number of days after the carrier says the parcel landed.
+            Automated post-purchase emails sent after carrier delivery scans.
           </p>
         </header>
 
         <div className="Card">
-          <div className="Card__head"><h3 className="t-sm">Next request</h3></div>
+          <div className="Card__head">
+            <h3 className="t-sm">Next Email</h3>
+          </div>
           {nextRequest ? (
             <>
               <div className="Next">
                 <div className="Next__who">
                   <b>{nextRequest.order.customerName || "Guest Customer"} · {nextRequest.order.name}</b>
-                  <span>
+                  <span className="TplBadge" style={{ background: "var(--ink-tint)", color: "var(--ink)", marginTop: "4px" }}>
+                    {nextRequest.templateName}
+                  </span>
+                  <span style={{ display: "block", marginTop: "4px" }}>
                     {due
                       ? "Due — goes out in the next batch"
                       : `Sends ${new Date(nextRequest.sendAt).toLocaleDateString()}`}
@@ -101,7 +125,7 @@ export default function Overview() {
           ) : (
             <div className="Empty">
               <b>Nothing waiting to send</b>
-              <p>Every delivered order has either been asked or ruled out.</p>
+              <p>Every delivered order has been processed or ruled out.</p>
             </div>
           )}
         </div>
@@ -110,7 +134,7 @@ export default function Overview() {
           <div className="Card" style={{ margin: 0 }}>
             <div className="Kpi__v">{counts.queue}</div>
             <div className="Kpi__l">In the queue</div>
-            <div className="Kpi__d sub">Delivered, waiting out the {waitDays ?? "—"}-day pause</div>
+            <div className="Kpi__d sub">Delivered, queued for scheduled send dates</div>
           </div>
           <div className="Card" style={{ margin: 0 }}>
             <div className="Kpi__v">{counts.waiting}</div>
@@ -129,17 +153,36 @@ export default function Overview() {
             <h3 className="t-sm">Recently sent</h3>
           </div>
           <table className="Table">
-            <thead><tr><th>Customer</th><th className="end">Sent</th></tr></thead>
+            <thead>
+              <tr>
+                <th style={{ width: "30%" }}>Customer</th>
+                <th style={{ width: "20%" }}>Order</th>
+                <th style={{ width: "28%" }}>Template</th>
+                <th className="end" style={{ width: "22%" }}>Sent Date</th>
+              </tr>
+            </thead>
             <tbody>
               {recentSent.length === 0 ? (
-                <tr><td colSpan={2}><div className="Empty"><b>Nothing sent yet</b></div></td></tr>
+                <tr><td colSpan={4}><div className="Empty"><b>Nothing sent yet</b></div></td></tr>
               ) : (
                 recentSent.map((o) => (
                   <tr key={o.id}>
                     <td>
                       <div className="Who">
                         <span className="Ava">{getInitials(o.customerName)}</span>
-                        <div><b>{o.customerName || "Guest Customer"}</b><span>{o.name}</span></div>
+                        <b>{o.customerName || "Guest Customer"}</b>
+                      </div>
+                    </td>
+                    <td className="mono" style={{ fontWeight: 600 }}>
+                      {o.name}
+                    </td>
+                    <td>
+                      <div style={{ display: "flex", gap: "4px", flexWrap: "wrap" }}>
+                        {o.sentTemplateNames.map((name, i) => (
+                          <span key={i} className="TplBadge">
+                            {name}
+                          </span>
+                        ))}
                       </div>
                     </td>
                     <td className="sub mono end">{new Date(o.sentAt).toLocaleString()}</td>
@@ -187,6 +230,8 @@ export default function Overview() {
         body, button, input, select, textarea {
           font-family: -apple-system, BlinkMacSystemFont, "San Francisco", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
         }
+
+        .TplBadge{display:inline-block;background:var(--surface-sub);color:var(--text);padding:2px 6px;border-radius:4px;font-size:11px;font-weight:600;white-space:nowrap;border:1px solid var(--border-sub);}
 
         .t-xl{font-size:28px;line-height:24px;font-weight:700;letter-spacing:-.01em}
         .t-sm{font-size:16px;line-height:18px;font-weight:600}
