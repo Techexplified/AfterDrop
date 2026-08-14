@@ -28,11 +28,11 @@ export async function loader({ request }) {
   ]);
 
   const counts = {
-    queue: results.filter((r) => r.state === "SCHEDULED").length,
+    // FIX: Include both SCHEDULED and DUE states in the queue count
+    queue: results.filter((r) => r.state === "SCHEDULED" || r.state === "DUE").length,
     waiting: results.filter((r) => r.state === "WAITING").length,
     suppressed: results.filter((r) => r.state === "SUPPRESSED").length,
   };
-
   const upcoming = results
     .filter((r) => (r.state === "SCHEDULED" || r.state === "DUE") && r.sendAt)
     .sort((a, b) => new Date(a.sendAt) - new Date(b.sendAt));
@@ -40,10 +40,10 @@ export async function loader({ request }) {
   const recentSent = rawRecentSent.map(order => {
     let sentEmailsObj = {};
     try {
-      sentEmailsObj = typeof order.sentEmails === "string" 
-        ? JSON.parse(order.sentEmails) 
+      sentEmailsObj = typeof order.sentEmails === "string"
+        ? JSON.parse(order.sentEmails)
         : (order.sentEmails || {});
-    } catch(e) {}
+    } catch (e) { }
 
     const sentTemplateNames = Object.keys(sentEmailsObj).map(
       key => TEMPLATES[key]?.name || key
