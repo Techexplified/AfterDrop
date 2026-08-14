@@ -13,7 +13,7 @@ const TZS = [
     { v: "Australia/Sydney", n: "(GMT+10:00) Sydney" },
 ];
 
-// --- Zod Schema for Full App Configuration ---
+// --- Zod Schema for Full App Configuration (excludes storeName) ---
 const unifiedConfigSchema = z.object({
     waitDays: z.number().int().min(0).max(90).default(3),
     sendHour: z.number().int().min(0).max(23).default(10),
@@ -72,7 +72,7 @@ export async function loader({ request }) {
         suppression = await db.suppressionSettings.create({ data: { shop: session.shop } });
     }
 
-    // Exact mapping to your Prisma models
+    // Exact mapping to your Prisma models (excluding storeName per config plan)
     const currentConfig = {
         waitDays: settings.settleInDays,
         sendHour: settings.sendHour,
@@ -95,7 +95,6 @@ export async function loader({ request }) {
     return data({
         settings,
         suppression,
-        // Horizontal single-line JSON string representation
         initialConfigJson: JSON.stringify(currentConfig),
         shop: session.shop,
     });
@@ -107,7 +106,17 @@ export async function action({ request }) {
     const formData = await request.formData();
     const intent = formData.get("intent");
 
-    // 1. UPDATE TIMEZONE
+    // 1. UPDATE STORE NAME
+    if (intent === "save-store-name") {
+        const storeName = formData.get("storeName")?.trim() || null;
+        await db.shopSettings.update({
+            where: { shop: session.shop },
+            data: { storeName },
+        });
+        return data({ success: true, message: "Store name updated" });
+    }
+
+    // 2. UPDATE TIMEZONE
     if (intent === "save-timezone") {
         const timezone = formData.get("timezone");
         await db.shopSettings.update({
@@ -117,7 +126,7 @@ export async function action({ request }) {
         return data({ success: true, message: "Timezone updated" });
     }
 
-    // 2. DISPATCH STATIC TEST EMAIL
+    // 3. DISPATCH STATIC TEST EMAIL
     if (intent === "send-test") {
         const testEmail = formData.get("testEmail");
         if (!testEmail) return data({ error: "Please provide a valid test email address." }, { status: 400 });
@@ -134,7 +143,7 @@ export async function action({ request }) {
         return data({ error: result.error }, { status: 500 });
     }
 
-    // 3. APPLY PASTED JSON CONFIG
+    // 4. APPLY PASTED JSON CONFIG (Does NOT touch storeName)
     if (intent === "apply-config") {
         const rawConfig = formData.get("configJson");
         const validation = parseAndValidateConfig(rawConfig);
@@ -197,7 +206,7 @@ export async function action({ request }) {
         return data({ success: true, message: "Configuration applied successfully!" });
     }
 
-    // 4. RESET ALL SETTINGS TO DEFAULTS
+    // 5. RESET ALL SETTINGS TO DEFAULTS (storeName is NOT reset)
     if (intent === "reset-all") {
         await db.$transaction([
             db.shopSettings.upsert({
@@ -238,12 +247,14 @@ export async function action({ request }) {
 // --- COMPONENT ---
 export default function Settings() {
     const { settings, initialConfigJson } = useLoaderData();
+    const nameFetcher = useFetcher();
     const tzFetcher = useFetcher();
     const testFetcher = useFetcher();
     const configFetcher = useFetcher();
     const resetFetcher = useFetcher();
 
     // Local React State
+    const [storeName, setStoreName] = useState(settings.storeName || "");
     const [timezone, setTimezone] = useState(settings.timezone || "Asia/Kolkata");
     const [testingEnabled, setTestingEnabled] = useState(false);
     const [testEmail, setTestEmail] = useState("");
@@ -255,6 +266,12 @@ export default function Settings() {
     useEffect(() => {
         setConfigJson(initialConfigJson);
     }, [initialConfigJson]);
+
+    // Handle Store Name Save
+    const handleStoreNameSubmit = (e) => {
+        e.preventDefault();
+        nameFetcher.submit({ intent: "save-store-name", storeName }, { method: "post" });
+    };
 
     // Handle Timezone Changes
     const handleTimezoneChange = (e) => {
@@ -292,7 +309,7 @@ export default function Settings() {
 
     // Reset Action
     const handleReset = () => {
-        if (confirm("Are you sure you want to reset all settings to defaults? Sent history will remain intact.")) {
+        if (confirm("Are you sure you want to reset all settings to defaults? Sent history and store name will remain intact.")) {
             resetFetcher.submit({ intent: "reset-all" }, { method: "post" });
         }
     };
@@ -304,12 +321,44 @@ export default function Settings() {
                 <p style={{ margin: "0", color: "#616161", fontSize: "14px" }}>Store-level bits and the escape hatches.</p>
             </header>
 
-            {/* CARD 1: Store Timezone & Testing Mode */}
+            {/* CARD 1: Store Brand Name */}
+            <div style={{ background: "#fff", border: "1px solid #E3E3E3", borderRadius: "12px", padding: "24px", marginBottom: "20px" }}>
+                <h3 style={{ fontSize: "15px", margin: "0 0 4px 0", fontWeight: "600" }}>Store Name</h3>
+                <p style={{ margin: "0 0 16px 0", fontSize: "13px", color: "#616161", lineHeight: "1.4" }}>
+                    The public display name included in customer review requests and public feedback pages.
+                </p>
+
+                <form onSubmit={handleStoreNameSubmit} style={{ display: "flex", gap: "8px", maxWidth: "480px" }}>
+                    <input
+                        type="text"
+                        placeholder="e.g. Acme Clothing"
+                        value={storeName}
+                        onChange={(e) => setStoreName(e.target.value)}
+                        style={{ flex: 1, padding: "8px 12px", borderRadius: "6px", border: "1px solid #C9C9C9", fontSize: "14px" }}
+                    />
+                    <button
+                        type="submit"
+                        disabled={nameFetcher.state !== "idle"}
+                        style={{ padding: "8px 16px", background: "#303030", color: "#fff", border: "none", borderRadius: "6px", cursor: "pointer", fontWeight: "500", fontSize: "14px" }}
+                    >
+                        {nameFetcher.state !== "idle" ? "Saving..." : "Save"}
+                    </button>
+                </form>
+
+                {nameFetcher.data?.success && (
+                    <p style={{ color: "#0C5132", fontSize: "13px", margin: "8px 0 0 0", fontWeight: "500" }}>
+                        ✓ {nameFetcher.data.message}
+                    </p>
+                )}
+            </div>
+
+            {/* CARD 2: Store Timezone & Testing Mode */}
             <div style={{ background: "#fff", border: "1px solid #E3E3E3", borderRadius: "12px", padding: "24px", marginBottom: "20px" }}>
                 <div style={{ marginBottom: "24px" }}>
-                    <label htmlFor="fTz" style={{ display: "block", fontWeight: "500", fontSize: "14px", marginBottom: "8px" }}>
-                        Store timezone
-                    </label>
+                    <h3 style={{ fontSize: "15px", margin: "0 0 4px 0", fontWeight: "600" }}>Store Timezone</h3>
+                    <p style={{ margin: "0 0 12px 0", fontSize: "13px", color: "#616161" }}>
+                        Used when you send on your own clock, and for everything shown on these screens.
+                    </p>
                     <select
                         id="fTz"
                         value={timezone}
@@ -320,9 +369,11 @@ export default function Settings() {
                             <option key={t.v} value={t.v}>{t.n}</option>
                         ))}
                     </select>
-                    <p style={{ margin: "8px 0 0 0", fontSize: "13px", color: "#616161" }}>
-                        Used when you send on your own clock, and for everything shown on these screens.
-                    </p>
+                    {tzFetcher.data?.success && (
+                        <p style={{ color: "#0C5132", fontSize: "13px", margin: "8px 0 0 0", fontWeight: "500" }}>
+                            ✓ {tzFetcher.data.message}
+                        </p>
+                    )}
                 </div>
 
                 <hr style={{ border: "none", borderTop: "1px solid #E3E3E3", margin: "24px 0" }} />
@@ -378,7 +429,7 @@ export default function Settings() {
                 </div>
             </div>
 
-            {/* CARD 2: Configuration Import/Export */}
+            {/* CARD 3: Configuration Import/Export */}
             <div style={{ background: "#fff", border: "1px solid #E3E3E3", borderRadius: "12px", padding: "24px", marginBottom: "20px" }}>
                 <h3 style={{ fontSize: "15px", margin: "0 0 4px 0", fontWeight: "600" }}>Configuration</h3>
                 <p style={{ margin: "0 0 16px 0", fontSize: "13px", color: "#616161" }}>
@@ -436,7 +487,7 @@ export default function Settings() {
                 </div>
             </div>
 
-            {/* CARD 3: Reset */}
+            {/* CARD 4: Reset */}
             <div style={{ background: "#fff", border: "1px solid #E3E3E3", borderRadius: "12px", padding: "24px" }}>
                 <h3 style={{ fontSize: "15px", margin: "0 0 4px 0", fontWeight: "600" }}>Reset</h3>
                 <p style={{ margin: "0 0 16px 0", fontSize: "13px", color: "#616161" }}>
