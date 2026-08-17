@@ -1,20 +1,18 @@
-import {data } from "react-router";
-import {dispatchScheduledOrders} from "../lib/dispatcher.server";
-import { process } from "zod/v4/core";
-import { success } from "zod";
+import { data } from "react-router";
+import { dispatchScheduledOrders } from "../lib/dispatcher.server";
 
-export async function loader({request}) {
+export async function loader({ request }) {
     const authHeader = request.headers.get("authorization");
     const cronSecret = process.env.CRON_SECRET;
 
-    if(cronSecret && authHeader !== `Bearer ${cronSecret}`){
-        return data({error: "Unauthorized"}, {status: 401});
+    if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
+        return data({ error: "Unauthorized" }, { status: 401 });
     }
 
-    try{
+    try {
         const summary = await dispatchScheduledOrders();
-        return data({success:true, summary});
-    }catch( error ){
-        return data({success: false, error: error.message}, {status: 500});
+        return data({ success: true, summary });
+    } catch (error) {
+        return data({ success: false, error: error.message }, { status: 500 });
     }
 }
