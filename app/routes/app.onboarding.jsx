@@ -57,6 +57,7 @@ export async function loader({ request }) {
     const { session } = await authenticate.admin(request);
     const shop = session.shop;
 
+    const url = new URL(request.url);
     const settings = await db.shopSettings.findUnique({ where: { shop } });
     if (settings?.isOnboarded) {
         return redirect(`/app/overview?${url.searchParams.toString()}`);
