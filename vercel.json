@@ -1,5 +1,5 @@
 {
-  "buildCommand": "prisma generate && remix vite:build",
+  "buildCommand": "npx prisma generate && react-router build",
   "crons": [
     {
       "path": "/api/cron",
