@@ -59,7 +59,7 @@ export async function loader({ request }) {
 
     const settings = await db.shopSettings.findUnique({ where: { shop } });
     if (settings?.isOnboarded) {
-        throw redirect("/app/overview");
+        return redirect("/app/overview");
     }
 
     const shopName = shop
