@@ -2,7 +2,7 @@
 
 client_id = "fdbf63912f0495ea62c44d040dc90281"
 name = "AfterDrop"
-application_url = "https://example.com"
+application_url = "https://after-drop-two.vercel.app"
 embedded = true
 
 [access_scopes]
@@ -49,7 +49,7 @@ api_version = "2026-10"
   topics = ["fulfillment_events/create" , "orders/fulfilled", "orders/updated"]
 
 [auth]
-redirect_urls = [ "https://example.com/api/auth" ]
+redirect_urls = [ "https://after-drop-two.vercel.app/api/auth" ]
 
 [build]
 automatically_update_urls_on_dev = true
