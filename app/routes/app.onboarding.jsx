@@ -587,9 +587,11 @@ export default function Onboarding() {
             <div className="shell">
                 <div className="main">
                     <div className="main-top">
+                        {/* 
                         <button className="skip" onClick={() => navigate("/app")}>
                             Skip — use the defaults
                         </button>
+                        */}
                     </div>
 
                     <main className="stage">
