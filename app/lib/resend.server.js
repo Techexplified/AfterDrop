@@ -3,6 +3,24 @@ import { resolveTargetUrl, TEMPLATES } from "./template-defaults";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
+const SENDER_DOMAIN = process.env.RESEND_DOMAIN || "shopify.explified.com";
+
+/**
+ * Returns a meaningful sender email address based on template type.
+ * Can be overridden globally via RESEND_FROM_EMAIL env variable.
+ * - review -> reviews@shopify.explified.com
+ * - other templates -> notifications@shopify.explified.com
+ */
+export function getSenderEmail(templateId) {
+  if (process.env.RESEND_FROM_EMAIL) {
+    return process.env.RESEND_FROM_EMAIL;
+  }
+  if (templateId === "review") {
+    return `reviews@${SENDER_DOMAIN}`;
+  }
+  return `notifications@${SENDER_DOMAIN}`;
+}
+
 function fillTokens(text, { customerName, orderName, productName, agoText }) {
   if (!text) return "";
   const first = customerName ? customerName.split(" ")[0] : "there";
@@ -44,7 +62,8 @@ export async function sendTemplateEmail({
       targetUrl = `${appUrl}/review/${reviewToken}?rating=5`;
     }
 
-    const sender = `${shopName || "AfterDrop"} <onboarding@resend.dev>`;
+    const fromEmail = getSenderEmail(templateId);
+    const sender = `${shopName || "AfterDrop"} <${fromEmail}>`;
 
     const html = `
       <div style="font-family: -apple-system, sans-serif; padding: 20px; max-width: 580px; margin: 0 auto; text-align: center; color: #303030;">
@@ -121,8 +140,9 @@ export async function sendTestRequest({ email, shopName }) {
   if (!email) return { success: false, error: "No test email provided" };
 
   try {
+    const testSenderEmail = process.env.RESEND_TEST_FROM_EMAIL || `test@${SENDER_DOMAIN}`;
     const data = await resend.emails.send({
-      from: `${shopName || "AfterDrop"} (Test) <test@resend.dev>`,
+      from: `${shopName || "AfterDrop"} (Test) <${testSenderEmail}>`,
       to: email,
       subject: "AfterDrop test email",
       html: `
