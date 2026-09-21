@@ -92,7 +92,11 @@ export async function action({ request }) {
       return data({ error: "Order not found" }, { status: 404 });
     }
 
-    const templateSettings = await db.templateSettings.findUnique({ where: { shop } });
+    const [shopSettings, templateSettings] = await Promise.all([
+      db.shopSettings.findUnique({ where: { shop: session.shop }, select: { storeName: true } }),
+      db.templateSettings.findUnique({ where: { shop } }),
+    ]);
+
     let customConfigs = {};
     try {
       customConfigs = typeof templateSettings?.customConfigs === "string"
@@ -100,10 +104,11 @@ export async function action({ request }) {
         : (templateSettings?.customConfigs || {});
     } catch (e) {}
 
-    const cleanShopName = session.shop
+    const fallbackShopName = session.shop
       .replace(".myshopify.com", "")
       .replace(/-/g, " ")
       .replace(/\b\w/g, (l) => l.toUpperCase());
+    const cleanShopName = shopSettings?.storeName?.trim() || fallbackShopName;
 
     const featuredProduct = {
       name: `Items from Order ${order.name}`,

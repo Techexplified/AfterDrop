@@ -79,11 +79,15 @@ export async function action({ request }) {
 
     if (intent === "send-test") {
         const testEmail = formData.get("testEmail");
-        const shopName = formData.get("shopName") || shop;
+        const fallbackShopName = shop
+            .replace(".myshopify.com", "")
+            .replace(/-/g, " ")
+            .replace(/\b\w/g, (l) => l.toUpperCase());
+        const shopName = formData.get("shopName")?.trim() || fallbackShopName;
 
         if (!testEmail) return data({ error: "Please provide a valid test email address." }, { status: 400 });
 
-        const result = await sendTestRequest({ email: testEmail, shopName });
+        const result = await sendTestRequest({ email: testEmail, shopName, shop });
         if (result.success) {
             return data({ success: true, message: `Test email sent to ${testEmail}` });
         }

@@ -3,11 +3,11 @@ import { scheduleAllOrders } from "./schedule.server";
 import { sendTemplateEmail } from "./resend.server";
 
 export async function dispatchScheduledOrders() {
-  const shops = await db.shopSettings.findMany({ select: { shop: true } });
+  const shops = await db.shopSettings.findMany({ select: { shop: true, storeName: true } });
 
   const results = { processed: 0, sent: 0, errors: [] };
 
-  for (const { shop } of shops) {
+  for (const { shop, storeName } of shops) {
     try {
       const scheduledRows = await scheduleAllOrders(shop);
       const templateSettings = await db.templateSettings.findUnique({ where: { shop } });
@@ -27,10 +27,11 @@ export async function dispatchScheduledOrders() {
       for (const row of dueOrders) {
         results.processed++;
         const order = row.order;
-        const cleanShopName = shop
+        const fallbackShopName = shop
           .replace(".myshopify.com", "")
           .replace(/-/g, " ")
           .replace(/\b\w/g, (l) => l.toUpperCase());
+        const cleanShopName = storeName?.trim() || fallbackShopName;
 
         const featuredProduct = {
           name: `Items from Order ${order.name}`,

@@ -62,13 +62,27 @@ export async function sendTemplateEmail({
       targetUrl = `${appUrl}/review/${reviewToken}?rating=5`;
     }
 
+    let finalShopName = shopName;
+    if ((!finalShopName || finalShopName === "AfterDrop") && shop) {
+      try {
+        const { default: db } = await import("../db.server");
+        const settings = await db.shopSettings.findUnique({
+          where: { shop },
+          select: { storeName: true },
+        });
+        if (settings?.storeName) {
+          finalShopName = settings.storeName;
+        }
+      } catch (e) {}
+    }
+
     const fromEmail = getSenderEmail(templateId);
-    const sender = `${shopName || "AfterDrop"} <${fromEmail}>`;
+    const sender = `${finalShopName || "AfterDrop"} <${fromEmail}>`;
 
     const html = `
       <div style="font-family: -apple-system, sans-serif; padding: 20px; max-width: 580px; margin: 0 auto; text-align: center; color: #303030;">
         <div style="font-size: 13px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; margin-bottom: 20px;">
-          ${shopName}
+          ${finalShopName || "AfterDrop"}
         </div>
         <h2 style="font-size: 20px; font-weight: 700; margin: 0 0 10px;">${headline}</h2>
         <p style="font-size: 14px; line-height: 1.6; color: #5A5D63; margin: 0 0 20px;">${body}</p>
@@ -113,7 +127,7 @@ export async function sendTemplateEmail({
 
         <!-- UNSUBSCRIBE FOOTER -->
         <div style="margin-top: 32px; font-size: 11px; color: #8C9098; text-align: center;">
-          <p style="margin: 0 0 4px 0;">Sent by ${shopName}</p>
+          <p style="margin: 0 0 4px 0;">Sent by ${finalShopName || "your store"}</p>
           ${reviewToken && appUrl
         ? `<a href="${appUrl}/unsubscribe/${reviewToken}" style="color: #8C9098; text-decoration: underline;">Unsubscribe from emails</a>`
         : ""
@@ -136,19 +150,33 @@ export async function sendTemplateEmail({
   }
 }
 
-export async function sendTestRequest({ email, shopName }) {
+export async function sendTestRequest({ email, shopName, shop }) {
   if (!email) return { success: false, error: "No test email provided" };
 
   try {
+    let finalShopName = shopName;
+    if ((!finalShopName || finalShopName === "AfterDrop") && shop) {
+      try {
+        const { default: db } = await import("../db.server");
+        const settings = await db.shopSettings.findUnique({
+          where: { shop },
+          select: { storeName: true },
+        });
+        if (settings?.storeName) {
+          finalShopName = settings.storeName;
+        }
+      } catch (e) {}
+    }
+
     const testSenderEmail = process.env.RESEND_TEST_FROM_EMAIL || `test@${SENDER_DOMAIN}`;
     const data = await resend.emails.send({
-      from: `${shopName || "AfterDrop"} (Test) <${testSenderEmail}>`,
+      from: `${finalShopName || "AfterDrop"} (Test) <${testSenderEmail}>`,
       to: email,
       subject: "AfterDrop test email",
       html: `
         <div style="font-family: sans-serif; padding: 20px; max-width: 600px; margin: 0 auto; text-align: center;">
           <h2>This is a test email 👋</h2>
-          <p>Your AfterDrop review request emails will look like this — sent from <strong>${shopName || "your store"}</strong>.</p>
+          <p>Your AfterDrop review request emails will look like this — sent from <strong>${finalShopName || "your store"}</strong>.</p>
           <p style="color:#888; font-size:13px;">No order data was used — this is a static preview, not tied to any customer or order.</p>
           <div style="border: 1px solid #ddd; padding: 15px; border-radius: 8px; margin: 20px 0;">
             <h3 style="margin:0 0 5px;font-size:16px;">Sample Product</h3>

@@ -131,12 +131,20 @@ export async function action({ request }) {
         const testEmail = formData.get("testEmail");
         if (!testEmail) return data({ error: "Please provide a valid test email address." }, { status: 400 });
 
-        const cleanShopName = session.shop
+        const formStoreName = formData.get("storeName")?.trim();
+        const settings = await db.shopSettings.findUnique({
+            where: { shop: session.shop },
+            select: { storeName: true },
+        });
+
+        const fallbackShopName = session.shop
             .replace(".myshopify.com", "")
             .replace(/-/g, " ")
             .replace(/\b\w/g, (l) => l.toUpperCase());
 
-        const result = await sendTestRequest({ email: testEmail, shopName: cleanShopName });
+        const finalShopName = formStoreName || settings?.storeName?.trim() || fallbackShopName;
+
+        const result = await sendTestRequest({ email: testEmail, shopName: finalShopName, shop: session.shop });
         if (result.success) {
             return data({ success: true, message: `Test email sent to ${testEmail}` });
         }
@@ -283,7 +291,7 @@ export default function Settings() {
     // Handle Test Email Dispatch
     const handleTestSend = (e) => {
         e.preventDefault();
-        testFetcher.submit({ intent: "send-test", testEmail }, { method: "post" });
+        testFetcher.submit({ intent: "send-test", testEmail, storeName }, { method: "post" });
     };
 
     // Safe Client-Side Config Apply
