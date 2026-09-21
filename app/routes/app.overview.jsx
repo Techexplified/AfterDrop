@@ -6,6 +6,7 @@ import db from "../db.server";
 import { Journey } from "../components/queue/journey";
 import { OrderModal } from "../components/queue/ordermodal";
 import { TEMPLATES } from "../lib/template-defaults";
+import { embedRedirect } from "../utils/shopify-embed-nav.server.js";
 
 const PAGE_SIZE = 5;
 
@@ -15,9 +16,16 @@ export async function loader({ request }) {
   const url = new URL(request.url);
   const page = Math.max(1, parseInt(url.searchParams.get("page") || "1", 10));
 
-  const [results, shopSettings, sentTotal, rawRecentSent] = await Promise.all([
-    scheduleAllOrders(shop),
+  const [shopSettings] = await Promise.all([
     db.shopSettings.findUnique({ where: { shop } }),
+  ]);
+
+  if (shopSettings && !shopSettings.isOnboarded) {
+    throw embedRedirect("/app/onboarding", request);
+  }
+
+  const [results, sentTotal, rawRecentSent] = await Promise.all([
+    scheduleAllOrders(shop),
     db.order.count({ where: { shop, sentAt: { not: null } } }),
     db.order.findMany({
       where: { shop, sentAt: { not: null } },

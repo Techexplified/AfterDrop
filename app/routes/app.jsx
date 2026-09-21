@@ -10,6 +10,10 @@ export const loader = async ({ request }) => {
   return { apiKey: process.env.SHOPIFY_API_KEY || "" };
 };
 
+export function shouldRevalidate() {
+  return false;
+}
+
 export default function App() {
   const { apiKey } = useLoaderData();
 

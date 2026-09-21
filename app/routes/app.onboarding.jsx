@@ -3,6 +3,7 @@ import { data, redirect, useLoaderData, useSubmit, useNavigate, useFetcher } fro
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
 import { sendTestRequest } from "../lib/resend.server";
+import { embedRedirect } from "../utils/shopify-embed-nav.server.js";
 
 // --- CONSTANTS & DATA ---
 const TZS = [
@@ -60,7 +61,7 @@ export async function loader({ request }) {
     const url = new URL(request.url);
     const settings = await db.shopSettings.findUnique({ where: { shop } });
     if (settings?.isOnboarded) {
-        return redirect(`/app/overview?${url.searchParams.toString()}`);
+        throw embedRedirect("/app/overview", request);
     }
 
     const shopName = shop
@@ -149,7 +150,7 @@ export async function action({ request }) {
         }),
     ]);
 
-    return redirect("/app/overview");
+    return embedRedirect("/app/overview", request);
 }
 
 export default function Onboarding() {
