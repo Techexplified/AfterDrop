@@ -26,7 +26,7 @@ function fillTokens(text, { customerName, orderName, productName, agoText }) {
   const first = customerName ? customerName.split(" ")[0] : "there";
   return text
     .replace(/\{first\}/g, first)
-    .replace(/\{product\}/g, productName || "item")
+    .replace(/\{product\}/g, productName || "your purchase")
     .replace(/\{order\}/g, orderName || "")
     .replace(/\{ago\}/g, agoText || "recently");
 }
@@ -97,16 +97,20 @@ export async function sendTemplateEmail({
         : ""
       }
 
-        <div style="border: 1px solid #E5E6E9; padding: 12px; border-radius: 8px; margin: 20px 0; text-align: left; display: flex; align-items: center; gap: 12px;">
-          ${product?.image
-        ? `<img src="${product.image}" alt="${product.name}" style="width: 56px; height: 56px; object-fit: cover; border-radius: 6px;" />`
-        : `<div style="width: 56px; height: 56px; background: #F0F1F3; border-radius: 6px;"></div>`
-      }
-          <div>
-            <strong style="display: block; font-size: 14px; color: #0A0A0A;">${product?.name || "Order Item"}</strong>
-            <span style="font-size: 12px; color: #8C9098;">Order ${orderName}</span>
-          </div>
-        </div>
+        <table cellpadding="0" cellspacing="0" border="0" style="width: 100%; border: 1px solid #E5E6E9; border-radius: 8px; margin: 20px 0; background: #FFFFFF; text-align: left;">
+          <tr>
+            <td style="width: 60px; padding: 12px 0 12px 12px; vertical-align: middle;">
+              ${product?.image
+                ? `<img src="${product.image}" alt="${product.name || 'Order Item'}" width="56" height="56" style="width: 56px; height: 56px; object-fit: cover; border-radius: 6px; display: block; border: 1px solid #ECEEF1;" />`
+                : `<div style="width: 56px; height: 56px; background: #F0F1F3; border-radius: 6px; text-align: center; line-height: 56px; font-size: 20px;">📦</div>`
+              }
+            </td>
+            <td style="padding: 12px 12px 12px 14px; vertical-align: middle;">
+              <strong style="display: block; font-size: 14px; color: #0A0A0A; line-height: 1.3;">${product?.name || "Order Item"}</strong>
+              <span style="display: block; font-size: 12px; color: #8C9098; margin-top: 3px;">Order ${orderName}${product?.extraItemCount ? ` · +${product.extraItemCount} other item${product.extraItemCount > 1 ? 's' : ''}` : ''}</span>
+            </td>
+          </tr>
+        </table>
 
         ${isReview
         ? `<div style="margin-bottom: 20px;">

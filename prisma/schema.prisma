@@ -87,6 +87,8 @@ model Order {
   customerTimezone    String?       // NEW
   primaryProductId    String?
   primaryProductName  String?
+  primaryProductImage String?
+  lineItems           Json      @default("[]")
   reviewToken         String?  @unique @default(cuid())
   reviews             Review[] // Relation to the new Review model
   createdAt           DateTime  @default(now())
@@ -105,16 +107,17 @@ model TemplateSettings {
 }
 
 model Review {
-  id          String   @id @default(cuid())
-  shop        String
-  orderId     String
-  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  productId   String?
-  productName String?
-  displayName String?
-  rating      Int
-  body        String?  @db.Text
-  createdAt   DateTime @default(now())
+  id           String   @id @default(cuid())
+  shop         String
+  orderId      String
+  order        Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId    String?
+  productName  String?
+  productImage String?
+  displayName  String?
+  rating       Int
+  body         String?  @db.Text
+  createdAt    DateTime @default(now())
 
   @@index([shop])
   @@index([orderId])

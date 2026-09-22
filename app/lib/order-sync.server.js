@@ -1,6 +1,6 @@
 import db from "../db.server";
 
-// 1. Updated GraphQL Query: Fetching product id & title for line items
+// 1. Updated GraphQL Query: Fetching product id, title & images for line items
 const ORDER_QUERY = `#graphql
   query getOrderForSync($id: ID!) {
     order(id: $id) {
@@ -27,10 +27,17 @@ const ORDER_QUERY = `#graphql
         edges {
           node {
             title
+            variantTitle
+            image {
+              url
+            }
             product {
               id
               title
               productType
+              featuredImage {
+                url
+              }
             }
           }
         }
@@ -69,12 +76,26 @@ export async function formatAndUpsertOrder(dbClient, shop, node) {
         )
     );
 
-    // 2. Extract Primary Product Info for Review CSV Export
-    const firstLineItem = node.lineItems?.edges?.[0]?.node;
+    // 2. Extract Line Items Summary & Primary Product Info
+    const lineItemNodes = node.lineItems?.edges?.map((e) => e.node).filter(Boolean) || [];
+
+    const lineItemsData = lineItemNodes.map((item) => ({
+        id: item.product?.id || null,
+        title: item.product?.title || item.title || "Item",
+        variantTitle: item.variantTitle || null,
+        productType: item.product?.productType || null,
+        image: item.image?.url || item.product?.featuredImage?.url || null,
+    }));
+
+    const firstLineItem = lineItemNodes[0];
     const primaryProductId = firstLineItem?.product?.id ?? null;
     const primaryProductName =
         firstLineItem?.product?.title ||
         firstLineItem?.title ||
+        null;
+    const primaryProductImage =
+        firstLineItem?.image?.url ||
+        firstLineItem?.product?.featuredImage?.url ||
         null;
 
     const cust = node.customer;
@@ -114,6 +135,8 @@ export async function formatAndUpsertOrder(dbClient, shop, node) {
         productTypes,
         primaryProductId,
         primaryProductName,
+        primaryProductImage,
+        lineItems: lineItemsData,
         totalPrice: Math.round(Number(node.totalPriceSet?.shopMoney?.amount || 0) * 100),
         trackingNumber: fulfillment?.trackingInfo?.[0]?.number ?? null,
         deliveredAt: deliveryEvent?.happenedAt ? new Date(deliveryEvent.happenedAt) : null,

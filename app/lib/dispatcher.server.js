@@ -33,9 +33,19 @@ export async function dispatchScheduledOrders() {
           .replace(/\b\w/g, (l) => l.toUpperCase());
         const cleanShopName = storeName?.trim() || fallbackShopName;
 
+        let extraCount = 0;
+        let parsedItems = [];
+        try {
+          parsedItems = typeof order.lineItems === "string" ? JSON.parse(order.lineItems) : (order.lineItems || []);
+        } catch (e) {}
+        if (Array.isArray(parsedItems) && parsedItems.length > 1) {
+          extraCount = parsedItems.length - 1;
+        }
+
         const featuredProduct = {
-          name: `Items from Order ${order.name}`,
-          image: null,
+          name: order.primaryProductName || `Items from Order ${order.name}`,
+          image: order.primaryProductImage || null,
+          extraItemCount: extraCount,
         };
 
         const emailResult = await sendTemplateEmail({

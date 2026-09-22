@@ -63,7 +63,7 @@ export async function loader({ request }) {
   return data({ rows: filtered, inTransitOrders, stateFilter, templateFilter, enabledTemplates });
 }
 export async function action({ request }) {
-  const { session } = await authenticate.admin(request);
+  const { session, admin } = await authenticate.admin(request);
   const shop = session.shop;
 
   const formData = await request.formData();
@@ -118,9 +118,45 @@ export async function action({ request }) {
       .replace(/\b\w/g, (l) => l.toUpperCase());
     const cleanShopName = shopSettings?.storeName?.trim() || fallbackShopName;
 
+    let primaryName = order.primaryProductName;
+    let primaryImage = order.primaryProductImage;
+    let extraCount = 0;
+
+    // Auto-backfill if order was synced before image support was added
+    if ((!primaryImage || !primaryName) && admin) {
+      try {
+        const { upsertOrderFromShopify } = await import("../lib/order-sync.server");
+        const refreshed = await upsertOrderFromShopify(admin, shop, order.id);
+        if (refreshed) {
+          primaryName = refreshed.primaryProductName;
+          primaryImage = refreshed.primaryProductImage;
+          let refreshedItems = [];
+          try {
+            refreshedItems = typeof refreshed.lineItems === "string" ? JSON.parse(refreshed.lineItems) : (refreshed.lineItems || []);
+          } catch (e) {}
+          if (Array.isArray(refreshedItems) && refreshedItems.length > 1) {
+            extraCount = refreshedItems.length - 1;
+          }
+        }
+      } catch (err) {
+        console.warn("[queue] Auto-backfill product image failed:", err.message);
+      }
+    }
+
+    if (!extraCount) {
+      let parsedItems = [];
+      try {
+        parsedItems = typeof order.lineItems === "string" ? JSON.parse(order.lineItems) : (order.lineItems || []);
+      } catch (e) {}
+      if (Array.isArray(parsedItems) && parsedItems.length > 1) {
+        extraCount = parsedItems.length - 1;
+      }
+    }
+
     const featuredProduct = {
-      name: `Items from Order ${order.name}`,
-      image: null,
+      name: primaryName || `Items from Order ${order.name}`,
+      image: primaryImage || null,
+      extraItemCount: extraCount,
     };
 
     // ✅ Dynamic import fixes the Vite plugin issue

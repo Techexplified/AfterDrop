@@ -25,6 +25,8 @@ export async function loader({ params, request }) {
         shopName: shopSettings?.storeName || fallbackShopName,
         orderName: order.name, // Usually better to show the short order # (e.g. #1001) instead of the long ID
         customerName: order.customerName || "",
+        productName: order.primaryProductName,
+        productImage: order.primaryProductImage,
         initialRating: parseInt(initialRating, 10),
     });
 }
@@ -50,6 +52,7 @@ export async function action({ request, params }) {
             // NEW: Inherit the product data directly from the Order staging fields
             productId: order.primaryProductId,
             productName: order.primaryProductName,
+            productImage: order.primaryProductImage,
             displayName: displayName || order.customerName,
             rating,
             body,
@@ -60,7 +63,7 @@ export async function action({ request, params }) {
 }
 
 export default function PublicReviewPage() {
-    const { shopName, orderName, customerName, initialRating } = useLoaderData();
+    const { shopName, orderName, customerName, productName, productImage, initialRating } = useLoaderData();
     const fetcher = useFetcher();
     const [rating, setRating] = useState(initialRating);
 
@@ -83,8 +86,17 @@ export default function PublicReviewPage() {
                 <div style={styles.header}>
                     <span style={styles.shopBadge}>{shopName}</span>
                     <h2 style={styles.title}>How did we do?</h2>
-                    <p style={styles.text}>Leave a review for your recent order ({orderName}).</p>
+                    <p style={styles.text}>
+                        {productName ? `Leave a review for ${productName} (${orderName}).` : `Leave a review for your recent order (${orderName}).`}
+                    </p>
                 </div>
+
+                {productImage && (
+                    <div style={{ display: "flex", alignItems: "center", gap: "12px", background: "#F9FAFB", padding: "10px 14px", borderRadius: "8px", border: "1px solid #E5E7EB", marginBottom: "16px", textAlign: "left" }}>
+                        <img src={productImage} alt={productName || "Product"} style={{ width: "48px", height: "48px", objectFit: "cover", borderRadius: "6px" }} />
+                        <span style={{ fontSize: "14px", fontWeight: "600", color: "#111827" }}>{productName || "Ordered Item"}</span>
+                    </div>
+                )}
 
                 <fetcher.Form method="post" style={styles.form}>
                     {/* Hidden input to pass the rating to the action */}
