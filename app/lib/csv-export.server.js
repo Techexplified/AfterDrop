@@ -18,7 +18,7 @@ function generateReviewTitle(rating) {
   }
 }
 
-export async function generateReviewsCsvResponse(shop) {
+export async function getReviewsCsvString(shop) {
   const allReviews = await db.review.findMany({
     where: { shop },
     orderBy: { createdAt: "desc" },
@@ -64,7 +64,14 @@ export async function generateReviewsCsvResponse(shop) {
     escapeCsv(new Date(r.createdAt).toISOString()),
   ].join(","));
 
-  const csvContent = [headers.join(","), ...csvRows].join("\n");
+  return {
+    csvContent: [headers.join(","), ...csvRows].join("\n"),
+    count: allReviews.length,
+  };
+}
+
+export async function generateReviewsCsvResponse(shop) {
+  const { csvContent } = await getReviewsCsvString(shop);
 
   return new Response(csvContent, {
     status: 200,

@@ -72,16 +72,22 @@ export async function action({ request }) {
 
   // --- 1. TOGGLE SKIP ---
   if (intent === "toggle-skip") {
-    const skip = formData.get("skip") === "true";
-
     const order = await db.order.findFirst({ where: { id: orderId, shop } });
     if (!order) return data({ error: "Order not found" }, { status: 404 });
 
+    const newSkip = formData.has("skip")
+      ? formData.get("skip") === "true"
+      : !order.skippedByYou;
+
     await db.order.update({
       where: { id: orderId },
-      data: { skippedByYou: skip },
+      data: { skippedByYou: newSkip },
     });
-    return data({ ok: true });
+    return data({ 
+      success: true, 
+      skipped: newSkip, 
+      message: newSkip ? `Order ${order.name} skipped.` : `Order ${order.name} restored to queue.` 
+    });
   }
 
   // --- 2. SEND NOW ---
@@ -412,7 +418,10 @@ export default function Queue() {
                           intent="toggle-skip" 
                           orderId={row.order.id} 
                           templateId={row.templateId}
-                          label="Skip" 
+                          label={row.order.skippedByYou ? "Unskip" : "Skip"}
+                          extraInputs={[
+                            { name: "skip", value: row.order.skippedByYou ? "false" : "true" }
+                          ]}
                         />
                       )}
                     </td>
@@ -671,7 +680,7 @@ export default function Queue() {
 }
 
 // Small helper for standardizing the action buttons
-function ActionForm({ intent, orderId, templateId, label, variant }) {
+function ActionForm({ intent, orderId, templateId, label, variant, extraInputs }) {
   const fetcher = useFetcher();
   const isSubmitting = fetcher.state !== "idle";
   return (
@@ -679,6 +688,9 @@ function ActionForm({ intent, orderId, templateId, label, variant }) {
       <input type="hidden" name="intent" value={intent} />
       <input type="hidden" name="orderId" value={orderId} />
       {templateId && <input type="hidden" name="templateId" value={templateId} />}
+      {extraInputs?.map((inp) => (
+        <input key={inp.name} type="hidden" name={inp.name} value={inp.value} />
+      ))}
       <button className={`Btn Btn--sm ${variant || ""}`} type="submit" disabled={isSubmitting}>
         {isSubmitting ? "..." : label}
       </button>

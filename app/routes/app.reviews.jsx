@@ -1,7 +1,8 @@
-import { data, useLoaderData, useSearchParams, useRevalidator } from "react-router";
+import { useEffect } from "react";
+import { data, useLoaderData, useSearchParams, useRevalidator, useFetcher } from "react-router";
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
-import { generateReviewsCsvResponse } from "../lib/csv-export.server";
+import { generateReviewsCsvResponse, getReviewsCsvString } from "../lib/csv-export.server";
 
 const PAGE_SIZE = 10;
 
@@ -10,7 +11,7 @@ export async function loader({ request }) {
     const url = new URL(request.url);
     const shop = session.shop;
 
-    // --- 1. CSV EXPORT HANDLER ---
+    // --- 1. CSV EXPORT HANDLER (Direct GET Fallback) ---
     if (url.searchParams.get("export") === "true") {
         return generateReviewsCsvResponse(shop);
     }
@@ -38,6 +39,21 @@ export async function loader({ request }) {
     return data({ reviews, totalReviews, currentPage, totalPages });
 }
 
+export async function action({ request }) {
+    const { session } = await authenticate.admin(request);
+    const shop = session.shop;
+    const formData = await request.formData();
+    const intent = formData.get("intent");
+
+    if (intent === "export-csv") {
+        const { csvContent, count } = await getReviewsCsvString(shop);
+        const filename = `afterdrop-reviews-${new Date().toISOString().slice(0, 10)}.csv`;
+        return data({ csvContent, filename, count });
+    }
+
+    return data({ error: "Invalid intent" }, { status: 400 });
+}
+
 function getInitials(name) {
     if (!name || name === "Guest Customer") return "GC";
     const parts = name.trim().split(/\s+/);
@@ -51,6 +67,23 @@ export default function ReviewsDashboard() {
     const { reviews, totalReviews, currentPage, totalPages } = useLoaderData();
     const [searchParams, setSearchParams] = useSearchParams();
     const revalidator = useRevalidator();
+    const exportFetcher = useFetcher();
+
+    useEffect(() => {
+        if (exportFetcher.data?.csvContent) {
+            const blob = new Blob([exportFetcher.data.csvContent], { type: "text/csv;charset=utf-8;" });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = exportFetcher.data.filename || `afterdrop-reviews-${new Date().toISOString().slice(0, 10)}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+        }
+    }, [exportFetcher.data]);
+
+    const isExporting = exportFetcher.state !== "idle";
 
     const startIndex = (currentPage - 1) * PAGE_SIZE;
 
@@ -80,9 +113,17 @@ export default function ReviewsDashboard() {
                         >
                             {revalidator.state === "loading" ? "Refreshing..." : "Refresh"}
                         </button>
-                        <a href="/app/reviews?export=true" download className="Btn">
-                            Export CSV
-                        </a>
+                        <exportFetcher.Form method="post" style={{ margin: 0 }}>
+                            <input type="hidden" name="intent" value="export-csv" />
+                            <button
+                                type="submit"
+                                className="Btn"
+                                disabled={isExporting || totalReviews === 0}
+                                title={totalReviews === 0 ? "No reviews to export" : "Export all reviews as CSV"}
+                            >
+                                {isExporting ? "Exporting..." : "Export CSV"}
+                            </button>
+                        </exportFetcher.Form>
                     </div>
                 </header>
 
