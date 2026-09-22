@@ -57,6 +57,7 @@ export async function sendTemplateEmail({
 
     const isReview = templateId === "review";
     const isPromo = templateId === "winback" || templateId === "referral";
+    const isCrossSell = templateId === "crossSell";
 
     if (isReview && reviewToken && appUrl) {
       targetUrl = `${appUrl}/review/${reviewToken}?rating=5`;
@@ -97,6 +98,7 @@ export async function sendTemplateEmail({
         : ""
       }
 
+        ${!isCrossSell ? `
         <table cellpadding="0" cellspacing="0" border="0" style="width: 100%; border: 1px solid #E5E6E9; border-radius: 8px; margin: 20px 0; background: #FFFFFF; text-align: left;">
           <tr>
             <td style="width: 60px; padding: 12px 0 12px 12px; vertical-align: middle;">
@@ -110,7 +112,7 @@ export async function sendTemplateEmail({
               <span style="display: block; font-size: 12px; color: #8C9098; margin-top: 3px;">Order ${orderName}${product?.extraItemCount ? ` · +${product.extraItemCount} other item${product.extraItemCount > 1 ? 's' : ''}` : ''}</span>
             </td>
           </tr>
-        </table>
+        </table>` : ""}
 
         ${isReview
         ? `<div style="margin-bottom: 20px;">

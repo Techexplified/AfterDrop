@@ -37,6 +37,7 @@ export function CustomizeModal({ template, shopName, shopDomain, onClose }) {
   const isSaving = fetcher.state !== "idle";
   const isPromoTemplate = template.id === "winback" || template.id === "referral";
   const isReviewTemplate = template.id === "review";
+  const isCrossSellTemplate = template.id === "crossSell";
 
   // Resolves against the merchant's real shop domain
   const resolvedButtonUrl = resolveTargetUrl(config.targetUrl, realDomain);
@@ -147,12 +148,14 @@ export function CustomizeModal({ template, shopName, shopDomain, onClose }) {
                 <label>Button Link URL</label>
                 <input
                   className="txt"
-                  placeholder={`https://${realDomain}`}
+                  placeholder={isCrossSellTemplate ? `https://${realDomain}/collections/accessories` : `https://${realDomain}`}
                   value={config.targetUrl || ""}
                   onChange={(e) => handleChange("targetUrl", e.target.value)}
                 />
                 <p className="hint">
-                  Currently routes to: <code>{resolvedButtonUrl}</code>
+                  {isCrossSellTemplate ? "Tip: Link directly to your accessories or recommendations collection." : (
+                    <>Currently routes to: <code>{resolvedButtonUrl}</code></>
+                  )}
                 </p>
               </div>
             )}
@@ -187,13 +190,15 @@ export function CustomizeModal({ template, shopName, shopDomain, onClose }) {
                   </div>
                 )}
 
-                <div className="prodcard">
-                  <div className="prodimg"></div>
-                  <div className="prodinfo">
-                    <b>Heavy Cotton Crew Tee</b>
-                    <span>Ash / M</span>
+                {!isCrossSellTemplate && (
+                  <div className="prodcard">
+                    <div className="prodimg"></div>
+                    <div className="prodinfo">
+                      <b>Heavy Cotton Crew Tee</b>
+                      <span>Ash / M</span>
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {isReviewTemplate && (
                   <div className="stars">

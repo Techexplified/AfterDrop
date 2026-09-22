@@ -28,6 +28,11 @@ const ORDER_QUERY = `#graphql
           node {
             title
             variantTitle
+            originalUnitPriceSet {
+              shopMoney {
+                amount
+              }
+            }
             image {
               url
             }
@@ -76,26 +81,33 @@ export async function formatAndUpsertOrder(dbClient, shop, node) {
         )
     );
 
-    // 2. Extract Line Items Summary & Primary Product Info
+    // 2. Extract Line Items Summary & Primary Product Info (sorted by highest price first)
     const lineItemNodes = node.lineItems?.edges?.map((e) => e.node).filter(Boolean) || [];
 
-    const lineItemsData = lineItemNodes.map((item) => ({
+    const sortedLineItems = [...lineItemNodes].sort((a, b) => {
+        const priceA = parseFloat(a.originalUnitPriceSet?.shopMoney?.amount || 0);
+        const priceB = parseFloat(b.originalUnitPriceSet?.shopMoney?.amount || 0);
+        return priceB - priceA;
+    });
+
+    const lineItemsData = sortedLineItems.map((item) => ({
         id: item.product?.id || null,
         title: item.product?.title || item.title || "Item",
         variantTitle: item.variantTitle || null,
         productType: item.product?.productType || null,
+        price: parseFloat(item.originalUnitPriceSet?.shopMoney?.amount || 0),
         image: item.image?.url || item.product?.featuredImage?.url || null,
     }));
 
-    const firstLineItem = lineItemNodes[0];
-    const primaryProductId = firstLineItem?.product?.id ?? null;
+    const heroItem = sortedLineItems[0] || lineItemNodes[0];
+    const primaryProductId = heroItem?.product?.id ?? null;
     const primaryProductName =
-        firstLineItem?.product?.title ||
-        firstLineItem?.title ||
+        heroItem?.product?.title ||
+        heroItem?.title ||
         null;
     const primaryProductImage =
-        firstLineItem?.image?.url ||
-        firstLineItem?.product?.featuredImage?.url ||
+        heroItem?.image?.url ||
+        heroItem?.product?.featuredImage?.url ||
         null;
 
     const cust = node.customer;
