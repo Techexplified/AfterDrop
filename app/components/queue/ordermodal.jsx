@@ -1,6 +1,6 @@
 import { Journey } from "./journey";
 
-export function OrderModal({ data, onClose }) {
+export function OrderModal({ data, onClose, onSimulateDelivery }) {
   if (!data) return null;
 
   const { order, state, reason, sendAt, estimated } = data;
@@ -45,6 +45,19 @@ export function OrderModal({ data, onClose }) {
               <div className="Step__b">
                 <p className="Step__t">Parcel landed</p>
                 <p className="Step__d">{order.deliveredAt ? "Confirmed by carrier." : estimated ? "Assumed landing date." : "Not landed yet."}</p>
+                {!order.deliveredAt && onSimulateDelivery && (
+                  <button
+                    type="button"
+                    className="Btn Btn--sm"
+                    style={{ marginTop: "6px", background: "#303030", color: "#fff", border: "none" }}
+                    onClick={() => {
+                      onSimulateDelivery(order.id);
+                      onClose();
+                    }}
+                  >
+                    Mark as delivered
+                  </button>
+                )}
               </div>
               <div className="Step__v">
                 {order.deliveredAt ? new Date(order.deliveredAt).toLocaleDateString() : "—"}
@@ -65,7 +78,20 @@ export function OrderModal({ data, onClose }) {
           </div>
         </div>
 
-        <div className="Modal__f">
+        <div className="Modal__f" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          {!order.deliveredAt && onSimulateDelivery ? (
+            <button
+              type="button"
+              className="Btn"
+              style={{ background: "#303030", color: "#fff", border: "none" }}
+              onClick={() => {
+                onSimulateDelivery(order.id);
+                onClose();
+              }}
+            >
+              Mark as delivered
+            </button>
+          ) : <div />}
           <button className="Btn" onClick={onClose}>Close</button>
         </div>
       </div>

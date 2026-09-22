@@ -52,7 +52,15 @@ export async function loader({ request }) {
     filtered = filtered.filter(r => r.state === stateFilter);
   }
 
-  return data({ rows: filtered, stateFilter, templateFilter, enabledTemplates });
+  // Fetch in-transit orders for simulate delivery picker
+  const inTransitOrders = await db.order.findMany({
+    where: { shop: session.shop, deliveredAt: null },
+    orderBy: { createdAt: "desc" },
+    select: { id: true, name: true, customerName: true, trackingNumber: true },
+    take: 20,
+  });
+
+  return data({ rows: filtered, inTransitOrders, stateFilter, templateFilter, enabledTemplates });
 }
 export async function action({ request }) {
   const { session } = await authenticate.admin(request);
@@ -151,6 +159,51 @@ export async function action({ request }) {
     }
   }
 
+  // --- 3. SIMULATE DELIVERY ---
+  if (intent === "simulate-delivery") {
+    const rawInput = formData.get("orderId")?.trim();
+    if (!rawInput) {
+      return data({ error: "Please provide a valid Order ID or Number (e.g. #1001)." }, { status: 400 });
+    }
+
+    const formattedName = rawInput.startsWith("#") ? rawInput : `#${rawInput}`;
+
+    // Robust multi-tenant query: matches ID, #1001, or 1001 scoped strictly to this merchant's shop
+    const order = await db.order.findFirst({
+      where: {
+        shop,
+        OR: [
+          { id: rawInput },
+          { name: rawInput },
+          { name: formattedName },
+        ],
+      },
+    });
+
+    if (!order) {
+      return data({ 
+        error: `Order "${rawInput}" was not found for this store. Please ensure this order exists and was fulfilled.` 
+      }, { status: 404 });
+    }
+
+    if (order.deliveredAt) {
+      return data({ 
+        success: true, 
+        message: `Order ${order.name} was already marked as delivered on ${new Date(order.deliveredAt).toLocaleDateString()}.` 
+      });
+    }
+
+    await db.order.update({
+      where: { id: order.id },
+      data: { deliveredAt: new Date() },
+    });
+
+    return data({ 
+      success: true, 
+      message: `Order ${order.name} marked as delivered! It is now scheduled in your queue.` 
+    });
+  }
+
   return data({ error: "Invalid action" }, { status: 400 });
 }
 
@@ -164,9 +217,15 @@ function getInitials(name) {
 }
 
 export default function Queue() {
-  const { rows, stateFilter, templateFilter, enabledTemplates } = useLoaderData();
+  const { rows, inTransitOrders = [], stateFilter, templateFilter, enabledTemplates } = useLoaderData();
   const [searchParams, setSearchParams] = useSearchParams();
   const [activeModal, setActiveModal] = useState(null);
+
+  // --- SIMULATE DELIVERY STATE ---
+  const [showSimulateModal, setShowSimulateModal] = useState(false);
+  const [selectedOrderId, setSelectedOrderId] = useState("");
+  const [manualOrderInput, setManualOrderInput] = useState("");
+  const simulateFetcher = useFetcher();
 
   // --- PAGINATION CALCULATIONS ---
   const rawPage = parseInt(searchParams.get("page") || "1", 10);
@@ -199,10 +258,34 @@ export default function Queue() {
   return (
     <>
       <div style={{ padding: "32px", maxWidth: "1200px", margin: "0 auto" }}>
-        <header className="pagehead">
-          <h1 className="t-xl">Queue</h1>
-          <p className="pagehead__sub">Every open order and what AfterDrop intends to do with it.</p>
+        <header className="pagehead" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "16px", flexWrap: "wrap" }}>
+          <div>
+            <h1 className="t-xl">Queue</h1>
+            <p className="pagehead__sub">Every open order and what AfterDrop intends to do with it.</p>
+          </div>
+          <div>
+            <button
+              className="Btn Btn--pri"
+              onClick={() => setShowSimulateModal(true)}
+            >
+              Mark as delivered
+            </button>
+          </div>
         </header>
+
+        {/* FEEDBACK BANNERS */}
+        {simulateFetcher.data?.message && (
+          <div style={{ background: "#CDFEE1", border: "1px solid #29845A", color: "#0C5132", padding: "10px 16px", borderRadius: "8px", marginBottom: "16px", fontSize: "13px", fontWeight: "500", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span>✓ {simulateFetcher.data.message}</span>
+            <button onClick={() => { simulateFetcher.data = null; }} style={{ background: "none", border: "none", cursor: "pointer", color: "#0C5132", fontWeight: "bold" }}>×</button>
+          </div>
+        )}
+        {simulateFetcher.data?.error && (
+          <div style={{ background: "#FFF0F0", border: "1px solid #FFD2CC", color: "#8E1F0B", padding: "10px 16px", borderRadius: "8px", marginBottom: "16px", fontSize: "13px", fontWeight: "500", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span>✕ {simulateFetcher.data.error}</span>
+            <button onClick={() => { simulateFetcher.data = null; }} style={{ background: "none", border: "none", cursor: "pointer", color: "#8E1F0B", fontWeight: "bold" }}>×</button>
+          </div>
+        )}
 
         {/* TABS & TEMPLATE DROPDOWN */}
         <div className="Filters" style={{ justifyContent: "space-between" }}>
@@ -270,8 +353,16 @@ export default function Queue() {
                       </span>
                     </td>
 
-                    <td className="end" style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
+                    <td className="end" style={{ display: "flex", gap: "8px", justifyContent: "flex-end", alignItems: "center" }}>
                       <button className="Btn Btn--sm" onClick={() => setActiveModal(row)}>Why?</button>
+                      {!row.order.deliveredAt && (
+                        <ActionForm 
+                          intent="simulate-delivery" 
+                          orderId={row.order.id} 
+                          label="Mark delivered" 
+                          variant="Btn--pri"
+                        />
+                      )}
                       {(row.state === "SCHEDULED" || row.state === "DUE") && (
                         <ActionForm 
                           intent="send-now" 
@@ -333,8 +424,85 @@ export default function Queue() {
         </div>
 
         {/* MODAL MOUNT */}
-        <OrderModal data={activeModal} onClose={() => setActiveModal(null)} />
+        <OrderModal 
+          data={activeModal} 
+          onClose={() => setActiveModal(null)} 
+          onSimulateDelivery={(orderId) => {
+            simulateFetcher.submit({ intent: "simulate-delivery", orderId }, { method: "post" });
+          }}
+        />
       </div>
+
+      {/* MARK AS DELIVERED MODAL */}
+      {showSimulateModal && (
+        <div className="Backdrop" onClick={() => setShowSimulateModal(false)}>
+          <div className="Modal" role="dialog" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "480px" }}>
+            <div className="Modal__h">
+              <h3>Mark order as delivered</h3>
+              <button className="Modal__x" onClick={() => setShowSimulateModal(false)}>×</button>
+            </div>
+            <div className="Modal__b">
+              <p style={{ margin: "0 0 16px 0", fontSize: "13px", color: "var(--text-sub)", lineHeight: "1.4" }}>
+                Record delivery for local drop-offs, couriers without live tracking updates, or test orders. This begins the post-delivery review timeline.
+              </p>
+
+              {inTransitOrders.length > 0 ? (
+                <div style={{ marginBottom: "16px" }}>
+                  <label style={{ display: "block", fontSize: "12px", fontWeight: "600", marginBottom: "6px" }}>
+                    Select an in-transit order:
+                  </label>
+                  <select 
+                    className="Select" 
+                    style={{ width: "100%" }}
+                    value={selectedOrderId}
+                    onChange={(e) => { setSelectedOrderId(e.target.value); setManualOrderInput(""); }}
+                  >
+                    <option value="">-- Choose an order --</option>
+                    {inTransitOrders.map((o) => (
+                      <option key={o.id} value={o.id}>
+                        {o.name} — {o.customerName || "Customer"} {o.trackingNumber ? `(${o.trackingNumber})` : ""}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : (
+                <p style={{ background: "var(--surface-sub)", padding: "10px 12px", borderRadius: "6px", fontSize: "12.5px", color: "var(--text-sub)", margin: "0 0 16px" }}>
+                  No orders currently waiting in transit. You can enter an order number below.
+                </p>
+              )}
+
+              <div>
+                <label style={{ display: "block", fontSize: "12px", fontWeight: "600", marginBottom: "6px" }}>
+                  {inTransitOrders.length > 0 ? "Or enter order number directly:" : "Enter order number:"}
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. 1001 or #1001"
+                  value={manualOrderInput}
+                  onChange={(e) => { setManualOrderInput(e.target.value); setSelectedOrderId(""); }}
+                  style={{ width: "100%", padding: "8px 12px", borderRadius: "6px", border: "1px solid var(--border-strong)", fontSize: "13px", boxSizing: "border-box" }}
+                />
+              </div>
+            </div>
+            <div className="Modal__f">
+              <button className="Btn" onClick={() => setShowSimulateModal(false)}>Cancel</button>
+              <button 
+                className="Btn Btn--pri" 
+                disabled={(!selectedOrderId && !manualOrderInput.trim()) || simulateFetcher.state !== "idle"}
+                onClick={() => {
+                  const targetId = manualOrderInput.trim() || selectedOrderId;
+                  simulateFetcher.submit({ intent: "simulate-delivery", orderId: targetId }, { method: "post" });
+                  setShowSimulateModal(false);
+                  setManualOrderInput("");
+                  setSelectedOrderId("");
+                }}
+              >
+                {simulateFetcher.state !== "idle" ? "Updating..." : "Mark as delivered"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* INJECTED STYLES */}
       <style dangerouslySetInnerHTML={{
@@ -405,6 +573,8 @@ export default function Queue() {
         .Btn{height:32px;padding:0 12px;border:0;border-radius:var(--r2);background:var(--surface);color:var(--text);box-shadow:0 0 0 1px rgba(0,0,0,.08) inset, 0 -1px 0 0 #B5B5B5 inset, 0 1px 0 0 rgba(255,255,255,.48) inset;font-size:13px;font-weight:600;line-height:32px;display:inline-flex;align-items:center;cursor:pointer}
         .Btn:hover{background:#F7F7F7}
         .Btn--sm{height:28px;padding:0 8px;font-size:12px;line-height:28px}
+        .Btn--pri{background:#303030 !important;color:#fff !important;border:none !important;box-shadow:none !important}
+        .Btn--pri:hover{background:#111 !important}
         .Btn[disabled]{opacity:.42;pointer-events:none}
 
         /* LEGEND */
@@ -465,15 +635,16 @@ export default function Queue() {
 }
 
 // Small helper for standardizing the action buttons
-function ActionForm({ intent, orderId, templateId, label }) {
+function ActionForm({ intent, orderId, templateId, label, variant }) {
   const fetcher = useFetcher();
+  const isSubmitting = fetcher.state !== "idle";
   return (
     <fetcher.Form method="post">
       <input type="hidden" name="intent" value={intent} />
       <input type="hidden" name="orderId" value={orderId} />
       {templateId && <input type="hidden" name="templateId" value={templateId} />}
-      <button className="Btn Btn--sm" type="submit" disabled={fetcher.state !== "idle"}>
-        {label}
+      <button className={`Btn Btn--sm ${variant || ""}`} type="submit" disabled={isSubmitting}>
+        {isSubmitting ? "..." : label}
       </button>
     </fetcher.Form>
   );
