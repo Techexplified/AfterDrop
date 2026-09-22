@@ -4,12 +4,12 @@ import db from "../db.server";
 export async function loader({ params }) {
     const { token } = params;
 
-    const order = db.order.findUnique({
+    const order = await db.order.findUnique({
         where: { reviewToken: token },
     });
 
     if (!order) {
-        throw new Response("INvalid link or token", { status: 400 });
+        throw new Response("Invalid link or token", { status: 404 });
     }
 
     const shopSettings = await db.shopSettings.findUnique({
@@ -20,9 +20,9 @@ export async function loader({ params }) {
 
     return data({
         shopName: shopSettings?.storeName || fallbackShopName,
-        customEmail : order.customEmail,
-        alreadyUnsubscribed: order.unsubscribed,
-    })
+        customerEmail: order.customerEmail || "Your email",
+        alreadyUnsubscribed: Boolean(order.unsubscribed),
+    });
 }
 
 export async function action({ params }) {
@@ -38,13 +38,20 @@ export async function action({ params }) {
 
   // THE GLOBAL OPT-OUT:
   // Update ALL orders belonging to this customer Email in this shop
-  await db.order.updateMany({
-    where: {
-      shop: order.shop,
-      customerEmail: order.customerEmail,
-    },
-    data: { unsubscribed: true },
-  });
+  if (order.customerEmail) {
+    await db.order.updateMany({
+      where: {
+        shop: order.shop,
+        customerEmail: order.customerEmail,
+      },
+      data: { unsubscribed: true },
+    });
+  } else {
+    await db.order.update({
+      where: { id: order.id },
+      data: { unsubscribed: true },
+    });
+  }
 
   return data({ success: true });
 }
@@ -62,6 +69,9 @@ export default function UnsubscribePage() {
         <h2 style={styles.title}>{shopName}</h2>
         {isDone ? (
           <div>
+            <div style={{ width: "44px", height: "44px", borderRadius: "50%", background: "#CDFEE1", color: "#0C5132", display: "grid", placeItems: "center", fontSize: "20px", fontWeight: "bold", margin: "0 auto 16px" }}>
+              ✓
+            </div>
             <p style={styles.text}>
               <strong>{customerEmail}</strong> has been unsubscribed from all post-purchase emails.
             </p>
@@ -77,6 +87,18 @@ export default function UnsubscribePage() {
             </fetcher.Form>
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+export function ErrorBoundary() {
+  return (
+    <div style={styles.container}>
+      <div style={styles.card}>
+        <h2 style={{ ...styles.title, color: "#E51C00" }}>Invalid Link</h2>
+        <p style={styles.text}>This unsubscribe link is invalid or has expired.</p>
+        <p style={styles.subtext}>If you need assistance, please contact the store directly.</p>
       </div>
     </div>
   );
