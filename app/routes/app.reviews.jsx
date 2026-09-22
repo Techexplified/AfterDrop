@@ -180,7 +180,7 @@ export default function ReviewsDashboard() {
                                                     {review.body || <i style={{ color: "var(--text-dis)" }}>No text provided</i>}
                                                 </p>
                                             </td>
-                                            <td className="end rowsub mono" style={{ verticalAlign: "middle" }}>
+                                            <td className="end mono" style={{ color: "var(--text-sub)", fontSize: "12px", whiteSpace: "nowrap" }}>
                                                 {new Date(review.createdAt).toLocaleDateString()}
                                             </td>
                                         </tr>
