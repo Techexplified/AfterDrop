@@ -73,9 +73,8 @@ export function Journey({ orderData, mini = false }) {
       style={{
         position: "relative",
         width: "100%",
-        overflow: "hidden",
+        overflow: "visible",
         boxSizing: "border-box",
-        padding: mini ? "12px 0" : "24px 0",
       }}
     >
       <div className="Jn__rail"></div>
