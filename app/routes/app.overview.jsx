@@ -20,7 +20,7 @@ export async function loader({ request }) {
     db.shopSettings.findUnique({ where: { shop } }),
   ]);
 
-  if (shopSettings && !shopSettings.isOnboarded) {
+  if (!shopSettings || !shopSettings.isOnboarded) {
     throw embedRedirect("/app/onboarding", request);
   }
 
