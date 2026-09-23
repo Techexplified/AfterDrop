@@ -267,6 +267,7 @@ export default function Queue() {
   const [showSimulateModal, setShowSimulateModal] = useState(false);
   const [selectedOrderId, setSelectedOrderId] = useState("");
   const [manualOrderInput, setManualOrderInput] = useState("");
+  const [confirmDeliveryOrder, setConfirmDeliveryOrder] = useState(null);
   const simulateFetcher = useFetcher();
 
   // --- PAGINATION CALCULATIONS ---
@@ -399,12 +400,13 @@ export default function Queue() {
                       <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end", alignItems: "center" }}>
                         <button className="Btn Btn--sm" onClick={() => setActiveModal(row)}>Why?</button>
                         {!row.order.deliveredAt && (
-                          <ActionForm 
-                            intent="simulate-delivery" 
-                            orderId={row.order.id} 
-                            label="Mark delivered" 
-                            variant="Btn--pri"
-                          />
+                          <button
+                            type="button"
+                            className="Btn Btn--sm"
+                            onClick={() => setConfirmDeliveryOrder(row.order)}
+                          >
+                            Mark delivered
+                          </button>
                         )}
                         {(row.state === "SCHEDULED" || row.state === "DUE") && (
                           <ActionForm 
@@ -475,10 +477,49 @@ export default function Queue() {
           data={activeModal} 
           onClose={() => setActiveModal(null)} 
           onSimulateDelivery={(orderId) => {
-            simulateFetcher.submit({ intent: "simulate-delivery", orderId }, { method: "post" });
+            const target = activeModal?.order;
+            setActiveModal(null);
+            if (target) {
+              setConfirmDeliveryOrder(target);
+            } else {
+              simulateFetcher.submit({ intent: "simulate-delivery", orderId }, { method: "post" });
+            }
           }}
         />
       </div>
+
+      {/* CONFIRM MANUAL DELIVERY MODAL */}
+      {confirmDeliveryOrder && (
+        <div className="Backdrop" onClick={() => setConfirmDeliveryOrder(null)}>
+          <div className="Modal" role="dialog" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "460px" }}>
+            <div className="Modal__h">
+              <h3>Mark {confirmDeliveryOrder.name} as delivered?</h3>
+              <button className="Modal__x" onClick={() => setConfirmDeliveryOrder(null)}>×</button>
+            </div>
+            <div className="Modal__b">
+              <p style={{ margin: "0 0 12px 0", fontSize: "13px", color: "var(--text)", lineHeight: "1.5" }}>
+                AfterDrop automatically tracks deliveries through your shipping carrier. You only need to mark an order manually for local pickups, couriers without live tracking, or test orders.
+              </p>
+              <p style={{ margin: 0, fontSize: "12.5px", color: "var(--text-sub)", lineHeight: "1.4" }}>
+                Confirming will start the post-delivery review timeline for <b>{confirmDeliveryOrder.customerName || "this customer"}</b>.
+              </p>
+            </div>
+            <div className="Modal__f">
+              <button className="Btn" onClick={() => setConfirmDeliveryOrder(null)}>Cancel</button>
+              <button 
+                className="Btn Btn--pri" 
+                disabled={simulateFetcher.state !== "idle"}
+                onClick={() => {
+                  simulateFetcher.submit({ intent: "simulate-delivery", orderId: confirmDeliveryOrder.id }, { method: "post" });
+                  setConfirmDeliveryOrder(null);
+                }}
+              >
+                {simulateFetcher.state !== "idle" ? "Marking..." : "Confirm delivery"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* MARK AS DELIVERED MODAL */}
       {showSimulateModal && (
