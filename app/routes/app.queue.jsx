@@ -395,35 +395,37 @@ export default function Queue() {
                       </span>
                     </td>
 
-                    <td className="end" style={{ display: "flex", gap: "8px", justifyContent: "flex-end", alignItems: "center" }}>
-                      <button className="Btn Btn--sm" onClick={() => setActiveModal(row)}>Why?</button>
-                      {!row.order.deliveredAt && (
-                        <ActionForm 
-                          intent="simulate-delivery" 
-                          orderId={row.order.id} 
-                          label="Mark delivered" 
-                          variant="Btn--pri"
-                        />
-                      )}
-                      {(row.state === "SCHEDULED" || row.state === "DUE") && (
-                        <ActionForm 
-                          intent="send-now" 
-                          orderId={row.order.id} 
-                          templateId={row.templateId} 
-                          label="Send now" 
-                        />
-                      )}
-                      {row.state !== "SENT" && (
-                        <ActionForm 
-                          intent="toggle-skip" 
-                          orderId={row.order.id} 
-                          templateId={row.templateId}
-                          label={row.order.skippedByYou ? "Unskip" : "Skip"}
-                          extraInputs={[
-                            { name: "skip", value: row.order.skippedByYou ? "false" : "true" }
-                          ]}
-                        />
-                      )}
+                    <td className="end">
+                      <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end", alignItems: "center" }}>
+                        <button className="Btn Btn--sm" onClick={() => setActiveModal(row)}>Why?</button>
+                        {!row.order.deliveredAt && (
+                          <ActionForm 
+                            intent="simulate-delivery" 
+                            orderId={row.order.id} 
+                            label="Mark delivered" 
+                            variant="Btn--pri"
+                          />
+                        )}
+                        {(row.state === "SCHEDULED" || row.state === "DUE") && (
+                          <ActionForm 
+                            intent="send-now" 
+                            orderId={row.order.id} 
+                            templateId={row.templateId} 
+                            label="Send now" 
+                          />
+                        )}
+                        {row.state !== "SENT" && (
+                          <ActionForm 
+                            intent="toggle-skip" 
+                            orderId={row.order.id} 
+                            templateId={row.templateId}
+                            label={row.order.skippedByYou ? "Unskip" : "Skip"}
+                            extraInputs={[
+                              { name: "skip", value: row.order.skippedByYou ? "false" : "true" }
+                            ]}
+                          />
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))
